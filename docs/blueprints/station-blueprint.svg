@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2200 1400" font-family="Consolas, monospace">
+  <defs>
+    <marker id="ar" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 z" fill="#7FD1FF"/>
+    </marker>
+    <marker id="al" markerWidth="10" markerHeight="8" refX="1" refY="4" orient="auto">
+      <path d="M9,0 L0,4 L9,8 z" fill="#7FD1FF"/>
+    </marker>
+    <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+      <path d="M30 0 H0 V30" fill="none" stroke="#123454" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+  <rect width="2200" height="1400" fill="#0A2239"/>
+  <rect width="2200" height="1400" fill="url(#grid)"/>
+
+  <rect x="1520" y="1290" width="660" height="90" fill="none" stroke="#7FD1FF" stroke-width="1.5"/>
+  <text x="1540" y="1322" fill="#E8F1FF" font-size="24" font-weight="bold">KOCHI METRO — TYPICAL ELEVATED STATION</text>
+  <text x="1540" y="1348" fill="#7FD1FF" font-size="15">SHEET 3/3 · METRES · 3-LEVEL DMRC TYPE, SIDE PLATFORMS</text>
+  <text x="1540" y="1370" fill="#7FD1FF" font-size="15">DIMS MARKED * ARE TYPICAL-STANDARD ESTIMATES — VERIFY ON SITE PHOTOS</text>
+
+  <!-- ============ CROSS-SECTION (scale 42 px/m) ============ -->
+  <text x="110" y="70" fill="#E8F1FF" font-size="26" font-weight="bold">CROSS-SECTION</text>
+  <text x="110" y="96" fill="#7FD1FF" font-size="16">scale 42 px/m · levels: street 0 / concourse +6.0* / platform +11.40 / rail +12.50</text>
+
+  <!-- street y=1160. platform floor +11.4 => y=1160-478.8=681.2 ; rail +12.5 => y=635 ; concourse +6 => y=908 -->
+  <line x1="60" y1="1160" x2="1120" y2="1160" stroke="#4A7396" stroke-width="3"/>
+  <text x="70" y="1184" fill="#4A7396" font-size="14">STREET ±0.00</text>
+
+  <!-- overall width 22.0m = 924px, centered x=590: from 128 to 1052 -->
+  <!-- concourse slab at +6: width 22m -->
+  <rect x="128" y="896" width="924" height="14" fill="none" stroke="#E8F1FF" stroke-width="2"/>
+  <text x="590" y="936" fill="#9FBEDB" font-size="14" text-anchor="middle">CONCOURSE +6.00* (ticketing, gates, shops)</text>
+
+  <!-- platform slab at +11.4: two side platforms 4.0m wide each = 168px -->
+  <rect x="128" y="681" width="168" height="12" fill="none" stroke="#E8F1FF" stroke-width="2.5"/>
+  <rect x="884" y="681" width="168" height="12" fill="none" stroke="#E8F1FF" stroke-width="2.5"/>
+  <text x="212" y="672" fill="#9FBEDB" font-size="13" text-anchor="middle">SIDE PLATFORM 4.00*</text>
+  <text x="968" y="672" fill="#9FBEDB" font-size="13" text-anchor="middle">SIDE PLATFORM 4.00*</text>
+
+  <!-- tracks between: twin U-girders as in sheet 2; track centres 4.2m=176px around centre 590 -->
+  <g stroke="#E8F1FF" stroke-width="2" fill="none">
+    <path d="M330,681 L330,601 L343,601 L343,655 L489,655 L489,601 L502,601 L502,681 Z"/>
+    <path d="M678,681 L678,601 L691,601 L691,655 L837,655 L837,601 L850,601 L850,681 Z"/>
+  </g>
+  <g stroke="#66E3D2" stroke-width="2">
+    <line x1="371" y1="654" x2="371" y2="646"/><line x1="461" y1="654" x2="461" y2="646"/>
+    <line x1="719" y1="654" x2="719" y2="646"/><line x1="809" y1="654" x2="809" y2="646"/>
+  </g>
+  <text x="590" y="700" fill="#66E3D2" font-size="12" text-anchor="middle">PLATFORM EDGE GAP 0.075 · EDGE = RAIL LEVEL +1.10</text>
+
+  <!-- supporting structure: paired columns under platform box, at ±7.5m = 315px -->
+  <g stroke="#E8F1FF" stroke-width="2.5" fill="none">
+    <rect x="252" y="693" width="50" height="467"/>
+    <rect x="878" y="693" width="50" height="467"/>
+  </g>
+  <text x="277" y="1100" fill="#9FBEDB" font-size="13" text-anchor="middle" transform="rotate(-90 277 1100)">COLUMN Ø1.20*</text>
+  <text x="903" y="1100" fill="#9FBEDB" font-size="13" text-anchor="middle" transform="rotate(-90 903 1100)">COLUMN Ø1.20*</text>
+
+  <!-- roof: arch over full width; spring at platform+3.0 (y=555), crown at platform+8.2 (y=336.8) -->
+  <path d="M108,596 Q590,300 1072,596" fill="none" stroke="#12B3A6" stroke-width="6"/>
+  <path d="M108,616 Q590,322 1072,616" fill="none" stroke="#E8F1FF" stroke-width="2"/>
+  <text x="590" y="300" fill="#12B3A6" font-size="15" text-anchor="middle">CURVED SHELL ROOF — KMRL TEAL standing-seam sheet</text>
+
+  <!-- roof steel columns from platform -->
+  <g stroke="#9FBEDB" stroke-width="2">
+    <line x1="180" y1="681" x2="180" y2="590"/>
+    <line x1="1000" y1="681" x2="1000" y2="590"/>
+  </g>
+
+  <!-- dims -->
+  <g stroke="#7FD1FF" stroke-width="1.2" fill="none">
+    <line x1="128" y1="1210" x2="1052" y2="1210" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="60" y1="681" x2="60" y2="1160" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="95" y1="896" x2="95" y2="1160" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="1090" y1="336" x2="1090" y2="681" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="128" y1="648" x2="296" y2="648" marker-start="url(#al)" marker-end="url(#ar)"/>
+  </g>
+  <text x="590" y="1240" fill="#7FD1FF" font-size="16" text-anchor="middle">OVERALL WIDTH 22.00*</text>
+  <text x="52" y="940" fill="#7FD1FF" font-size="14" transform="rotate(-90 52 940)">PLATFORM +11.40</text>
+  <text x="88" y="1050" fill="#7FD1FF" font-size="13" transform="rotate(-90 88 1050)">+6.00*</text>
+  <text x="1098" y="530" fill="#7FD1FF" font-size="13" transform="rotate(90 1098 530)">ROOF CROWN +8.20* ABOVE PLATFORM</text>
+  <text x="212" y="640" fill="#7FD1FF" font-size="13" text-anchor="middle">4.00*</text>
+
+  <!-- ============ SIDE ELEVATION (scale 10.5 px/m) ============ -->
+  <text x="1180" y="70" fill="#E8F1FF" font-size="26" font-weight="bold">SIDE ELEVATION</text>
+  <text x="1180" y="96" fill="#7FD1FF" font-size="16">scale 10.5 px/m · platform 75.0 usable · station box ≈ 95* incl. services</text>
+
+  <!-- street y=560; platform floor y=560-119.7=440; roof crown above platform 8.2*10.5=86 -->
+  <line x1="1150" y1="560" x2="2160" y2="560" stroke="#4A7396" stroke-width="3"/>
+  <!-- station box 95m = 997px from x=1160 -->
+  <!-- platform band -->
+  <rect x="1265" y="437" width="788" height="6" fill="none" stroke="#E8F1FF" stroke-width="2"/>
+  <!-- roof arc along length: gentle barrel with curved eaves ends -->
+  <path d="M1240,430 Q1250,352 1330,348 L1990,348 Q2070,352 2080,430" fill="none" stroke="#12B3A6" stroke-width="5"/>
+  <!-- concourse band -->
+  <rect x="1420" y="495" width="480" height="8" fill="none" stroke="#E8F1FF" stroke-width="2"/>
+  <!-- columns every 8m=84px under box -->
+  <g stroke="#E8F1FF" stroke-width="2">
+    <line x1="1330" y1="443" x2="1330" y2="560"/>
+    <line x1="1414" y1="443" x2="1414" y2="560"/>
+    <line x1="1498" y1="443" x2="1498" y2="560"/>
+    <line x1="1582" y1="443" x2="1582" y2="560"/>
+    <line x1="1666" y1="443" x2="1666" y2="560"/>
+    <line x1="1750" y1="443" x2="1750" y2="560"/>
+    <line x1="1834" y1="443" x2="1834" y2="560"/>
+    <line x1="1918" y1="443" x2="1918" y2="560"/>
+    <line x1="2002" y1="443" x2="2002" y2="560"/>
+  </g>
+  <!-- stair/escalator to street at both ends -->
+  <path d="M1265,500 L1160,560" stroke="#9FBEDB" stroke-width="3" fill="none"/>
+  <path d="M2053,500 L2158,560" stroke="#9FBEDB" stroke-width="3" fill="none"/>
+  <text x="1206" y="548" fill="#9FBEDB" font-size="12">STAIR+ESC</text>
+  <g stroke="#7FD1FF" stroke-width="1.2" fill="none">
+    <line x1="1265" y1="410" x2="2053" y2="410" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="1330" y1="588" x2="1414" y2="588" marker-start="url(#al)" marker-end="url(#ar)"/>
+  </g>
+  <text x="1659" y="402" fill="#7FD1FF" font-size="15" text-anchor="middle">PLATFORM 75.00 (3-car + margin)</text>
+  <text x="1372" y="610" fill="#7FD1FF" font-size="13" text-anchor="middle">8.00* GRID</text>
+
+  <!-- ============ PLAN (scale 10.5 px/m) ============ -->
+  <text x="1180" y="700" fill="#E8F1FF" font-size="26" font-weight="bold">PLATFORM-LEVEL PLAN</text>
+  <!-- box 95m x 22m = 997 x 231, from 1160,730 -->
+  <g stroke="#E8F1FF" stroke-width="2" fill="none">
+    <rect x="1163" y="730" width="997" height="231"/>
+    <!-- side platforms 4m = 42px -->
+    <line x1="1163" y1="772" x2="2160" y2="772"/>
+    <line x1="1163" y1="919" x2="2160" y2="919"/>
+    <!-- tracks -->
+    <line x1="1163" y1="800" x2="2160" y2="800" stroke-dasharray="10 6" stroke="#66E3D2"/>
+    <line x1="1163" y1="891" x2="2160" y2="891" stroke-dasharray="10 6" stroke="#66E3D2"/>
+  </g>
+  <text x="1660" y="762" fill="#9FBEDB" font-size="13" text-anchor="middle">PLATFORM A (toward TRIPUNITHURA)</text>
+  <text x="1660" y="950" fill="#9FBEDB" font-size="13" text-anchor="middle">PLATFORM B (toward ALUVA)</text>
+  <text x="1660" y="850" fill="#66E3D2" font-size="13" text-anchor="middle">UP TRACK · 4.20 CENTRES · DOWN TRACK</text>
+  <!-- stair cores -->
+  <rect x="1260" y="810" width="70" height="70" fill="none" stroke="#9FBEDB" stroke-width="2"/>
+  <rect x="1990" y="810" width="70" height="70" fill="none" stroke="#9FBEDB" stroke-width="2"/>
+  <text x="1295" y="852" fill="#9FBEDB" font-size="11" text-anchor="middle">CORE</text>
+  <text x="2025" y="852" fill="#9FBEDB" font-size="11" text-anchor="middle">CORE</text>
+
+  <!-- ============ NOTES ============ -->
+  <g fill="#7FD1FF" font-size="14">
+    <text x="330" y="985">SIGNATURE DETAILS TO MODEL:</text>
+    <text x="330" y="1010">· sweeping teal shell roof, curved eaves past platforms</text>
+    <text x="330" y="1035">· glass + vertical-louvre cladding at concourse level</text>
+    <text x="330" y="1060">· name board: white EN + ML lettering on teal</text>
+    <text x="330" y="1085">· yellow tactile strip 0.6 from platform edge</text>
+    <text x="330" y="1110">· stations share one shell; THEME = interior murals</text>
+    <text x="330" y="1135">  (Aluva: Periyar river · Edapally: heritage …)</text>
+  </g>
+  <g fill="#7FD1FF" font-size="15">
+    <text x="1180" y="1060">BLENDER / GAME INTEGRATION:</text>
+    <text x="1180" y="1086">· origin at track centreline, rail level, mid-length; +X along track</text>
+    <text x="1180" y="1112">· budget ≤ 40k tris (placed 25×) · bake AO · 2k atlas + emissive strips</text>
+    <text x="1180" y="1138">· name glow materials "PlatformLight" — game drives them at night</text>
+    <text x="1180" y="1164">· terminal stations (Aluva, Tripunithura) get a wider 26 m* box</text>
+    <text x="1180" y="1190">· the game keeps the deck/track procedural — leave the trough OPEN</text>
+    <text x="1180" y="1216">  through the station so the moving trains pass inside</text>
+  </g>
+
+  <!-- scale bar -->
+  <g stroke="#E8F1FF" stroke-width="3">
+    <line x1="110" y1="1268" x2="530" y2="1268"/>
+    <line x1="110" y1="1260" x2="110" y2="1276"/>
+    <line x1="320" y1="1262" x2="320" y2="1274"/>
+    <line x1="530" y1="1260" x2="530" y2="1276"/>
+  </g>
+  <text x="115" y="1254" fill="#E8F1FF" font-size="14">0          5          10 m  (42 px/m cross-section scale)</text>
+</svg>

@@ -1,0 +1,219 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2200 1400" font-family="Consolas, monospace">
+  <defs>
+    <marker id="ar" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 z" fill="#7FD1FF"/>
+    </marker>
+    <marker id="al" markerWidth="10" markerHeight="8" refX="1" refY="4" orient="auto">
+      <path d="M9,0 L0,4 L9,8 z" fill="#7FD1FF"/>
+    </marker>
+    <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+      <path d="M30 0 H0 V30" fill="none" stroke="#123454" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+  <rect width="2200" height="1400" fill="#0A2239"/>
+  <rect width="2200" height="1400" fill="url(#grid)"/>
+
+  <!-- title block -->
+  <rect x="1520" y="1290" width="660" height="90" fill="none" stroke="#7FD1FF" stroke-width="1.5"/>
+  <text x="1540" y="1322" fill="#E8F1FF" font-size="24" font-weight="bold">KOCHI METRO — ALSTOM METROPOLIS TRAINSET</text>
+  <text x="1540" y="1348" fill="#7FD1FF" font-size="15">SHEET 1/3 · SCALE BAR BELOW · ALL DIMENSIONS IN METRES</text>
+  <text x="1540" y="1370" fill="#7FD1FF" font-size="15">SOURCES: ALSTOM PRESS 2015/2017, KMRL · 750V DC THIRD RAIL (NO PANTOGRAPH)</text>
+
+  <!-- ============ FULL TRAINSET SIDE ELEVATION (scale 27 px/m) ============ -->
+  <text x="100" y="70" fill="#E8F1FF" font-size="26" font-weight="bold">SIDE ELEVATION — FULL 3-CAR SET</text>
+  <text x="100" y="96" fill="#7FD1FF" font-size="16">DMC-A (driving) + TC (trailer) + DMC-B (driving) · total 66.55 m · scale 27 px/m</text>
+
+  <!-- rail line at y=330; car body: floor 1.10m above rail; roof 3.90m above rail -->
+  <!-- 27 px/m: body top y = 330-3.90*27=224.7 ; floor y = 330-1.1*27 = 300.3 ; body height (roof-floor)=2.8m=75.6px -->
+  <g stroke="#E8F1FF" stroke-width="2" fill="none">
+    <!-- rail -->
+    <line x1="120" y1="330" x2="2080" y2="330" stroke="#4A7396" stroke-dasharray="12 6"/>
+    <!-- DMC-A body: 22.60m = 610.2px, from x=140 -->
+    <path d="M152,300 L152,262 Q152,225 190,225 L742,225 Q750,225 750,233 L750,300 Z" />
+    <!-- TC 21.35m = 576.5px -->
+    <rect x="756" y="225" width="576" height="75" rx="8"/>
+    <!-- DMC-B mirrored -->
+    <path d="M1986,300 L1986,262 Q1986,225 1948,225 L1344,225 Q1338,225 1338,233 L1338,300 Z" />
+    <!-- gangways -->
+    <rect x="750" y="240" width="6" height="55" fill="#4A7396"/>
+    <rect x="1332" y="240" width="6" height="55" fill="#4A7396"/>
+  </g>
+  <!-- bogies: 2 per car, centres 15.7m apart, wheel dia 0.86m -->
+  <g fill="none" stroke="#9FBEDB" stroke-width="1.5">
+    <!-- DMC-A bogie centres at 3.45m and 19.15m from front (x140) -->
+    <g id="bogie">
+      <rect x="212" y="302" width="70" height="14"/>
+      <circle cx="227" cy="322" r="11.6"/>
+      <circle cx="267" cy="322" r="11.6"/>
+    </g>
+    <use href="#bogie" x="424"/>   <!-- 15.7m = 424px -->
+    <use href="#bogie" x="610"/>
+    <use href="#bogie" x="1034"/>
+    <use href="#bogie" x="1196"/>
+    <use href="#bogie" x="1620"/>
+  </g>
+  <!-- third-rail shoe note -->
+  <text x="212" y="360" fill="#7FD1FF" font-size="13">bogie: wheel Ø0.86 · third-rail shoe at side sill (750V DC)</text>
+
+  <!-- doors on DMC-A: 4/side, opening 1.40m(37.8px) x 1.90m; centres at 5.0,9.9,14.8,19.7m from front -->
+  <g fill="#0A2239" stroke="#66E3D2" stroke-width="2">
+    <rect x="256" y="245" width="38" height="55"/>
+    <rect x="388" y="245" width="38" height="55"/>
+    <rect x="520" y="245" width="38" height="55"/>
+    <rect x="652" y="245" width="38" height="55"/>
+    <!-- TC doors -->
+    <rect x="800" y="245" width="38" height="55"/>
+    <rect x="932" y="245" width="38" height="55"/>
+    <rect x="1064" y="245" width="38" height="55"/>
+    <rect x="1196" y="245" width="38" height="55"/>
+    <!-- DMC-B doors mirrored -->
+    <rect x="1448" y="245" width="38" height="55"/>
+    <rect x="1580" y="245" width="38" height="55"/>
+    <rect x="1712" y="245" width="38" height="55"/>
+    <rect x="1844" y="245" width="38" height="55"/>
+  </g>
+  <!-- window band: 0.72m tall, sill 1.52m above floor -->
+  <g fill="#123454" stroke="#9FBEDB" stroke-width="1">
+    <rect x="306" y="240" width="70" height="22"/><rect x="438" y="240" width="70" height="22"/>
+    <rect x="570" y="240" width="70" height="22"/><rect x="850" y="240" width="70" height="22"/>
+    <rect x="982" y="240" width="70" height="22"/><rect x="1114" y="240" width="70" height="22"/>
+    <rect x="1498" y="240" width="70" height="22"/><rect x="1630" y="240" width="70" height="22"/>
+    <rect x="1762" y="240" width="70" height="22"/>
+  </g>
+  <!-- teal band along skirt & sweeping up at cab -->
+  <path d="M152,296 L750,296 L750,286 L200,286 Q160,286 152,262 Z" fill="#12B3A6" opacity="0.9"/>
+  <path d="M1986,296 L1338,296 L1338,286 L1938,286 Q1978,286 1986,262 Z" fill="#12B3A6" opacity="0.9"/>
+  <rect x="756" y="286" width="576" height="10" fill="#12B3A6" opacity="0.9"/>
+
+  <!-- dimensions -->
+  <g stroke="#7FD1FF" stroke-width="1.2" fill="none">
+    <line x1="152" y1="180" x2="1986" y2="180" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="152" y1="150" x2="152" y2="225" stroke-dasharray="4 4"/>
+    <line x1="1986" y1="150" x2="1986" y2="225" stroke-dasharray="4 4"/>
+    <line x1="152" y1="205" x2="750" y2="205" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="756" y1="205" x2="1332" y2="205" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="1338" y1="205" x2="1986" y2="205" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <!-- height dims -->
+    <line x1="2040" y1="225" x2="2040" y2="330" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="2090" y1="300" x2="2090" y2="330" marker-start="url(#al)" marker-end="url(#ar)"/>
+  </g>
+  <text x="1035" y="172" fill="#7FD1FF" font-size="18" text-anchor="middle">66.55 OVER COUPLERS</text>
+  <text x="451" y="199" fill="#7FD1FF" font-size="15" text-anchor="middle">22.60 DMC</text>
+  <text x="1044" y="199" fill="#7FD1FF" font-size="15" text-anchor="middle">21.35 TC</text>
+  <text x="1662" y="199" fill="#7FD1FF" font-size="15" text-anchor="middle">22.60 DMC</text>
+  <text x="2048" y="280" fill="#7FD1FF" font-size="14" transform="rotate(90 2048 280)">3.90 RAIL→ROOF</text>
+  <text x="2098" y="318" fill="#7FD1FF" font-size="12" transform="rotate(90 2098 318)">1.10 FLOOR</text>
+
+  <!-- ============ DMC DETAIL (scale 40 px/m) ============ -->
+  <text x="100" y="470" fill="#E8F1FF" font-size="26" font-weight="bold">DMC CAR — DOOR SPACING DETAIL</text>
+  <text x="100" y="496" fill="#7FD1FF" font-size="16">scale 40 px/m · door opening 1.40 wide × 1.90 high · 4 bi-parting doors/side</text>
+  <!-- rail y=740; roof y=740-156=584; floor y=740-44=696; body 22.6m=904px from x=140 -->
+  <g stroke="#E8F1FF" stroke-width="2.5" fill="none">
+    <line x1="100" y1="740" x2="1180" y2="740" stroke="#4A7396" stroke-dasharray="12 6"/>
+    <path d="M158,696 L158,640 Q158,584 214,584 L1016,584 Q1044,584 1044,612 L1044,696 Z"/>
+  </g>
+  <!-- cab window -->
+  <path d="M162,648 Q166,600 210,594 L246,594 L246,648 Z" fill="#123454" stroke="#9FBEDB" stroke-width="1.5"/>
+  <!-- tusk LED -->
+  <path d="M170,676 q10,-22 26,-26 l6,10 q-14,6 -20,24 z" fill="#CFEFFF"/>
+  <text x="150" y="722" fill="#66E3D2" font-size="13">"TUSK" LED DRL</text>
+  <!-- doors at centres 5.0,9.9,14.8,19.7m => x = 140+ c*40 -->
+  <g fill="#0A2239" stroke="#66E3D2" stroke-width="2.5">
+    <rect x="312" y="620" width="56" height="76"/>
+    <rect x="508" y="620" width="56" height="76"/>
+    <rect x="704" y="620" width="56" height="76"/>
+    <rect x="900" y="620" width="56" height="76"/>
+  </g>
+  <g fill="#123454" stroke="#9FBEDB" stroke-width="1.2">
+    <rect x="396" y="608" width="84" height="30"/>
+    <rect x="592" y="608" width="84" height="30"/>
+    <rect x="788" y="608" width="84" height="30"/>
+  </g>
+  <path d="M158,690 L1044,690 L1044,676 L240,676 Q186,676 166,640 L158,640 Z" fill="#12B3A6" opacity="0.9"/>
+  <g stroke="#7FD1FF" stroke-width="1.2" fill="none">
+    <line x1="158" y1="560" x2="340" y2="560" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="340" y1="560" x2="536" y2="560" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="536" y1="560" x2="732" y2="560" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="732" y1="560" x2="928" y2="560" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="928" y1="560" x2="1044" y2="560" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="312" y1="770" x2="368" y2="770" marker-start="url(#al)" marker-end="url(#ar)"/>
+  </g>
+  <text x="249" y="552" fill="#7FD1FF" font-size="14" text-anchor="middle">5.00</text>
+  <text x="438" y="552" fill="#7FD1FF" font-size="14" text-anchor="middle">4.90</text>
+  <text x="634" y="552" fill="#7FD1FF" font-size="14" text-anchor="middle">4.90</text>
+  <text x="830" y="552" fill="#7FD1FF" font-size="14" text-anchor="middle">4.90</text>
+  <text x="986" y="552" fill="#7FD1FF" font-size="14" text-anchor="middle">2.90</text>
+  <text x="340" y="792" fill="#7FD1FF" font-size="14" text-anchor="middle">1.40</text>
+
+  <!-- ============ FRONT ELEVATION (scale 60 px/m) ============ -->
+  <text x="1320" y="470" fill="#E8F1FF" font-size="26" font-weight="bold">FRONT ELEVATION</text>
+  <text x="1320" y="496" fill="#7FD1FF" font-size="16">scale 60 px/m · width 2.90 · rail→roof 3.90</text>
+  <!-- rail y=810; width 2.9m=174px centered x=1490 -->
+  <g stroke="#E8F1FF" stroke-width="2.5" fill="none">
+    <line x1="1330" y1="810" x2="1650" y2="810" stroke="#4A7396" stroke-dasharray="12 6"/>
+    <!-- body: floor 744, roof 576; rounded roof -->
+    <path d="M1403,744 L1403,634 Q1403,576 1461,576 L1519,576 Q1577,576 1577,634 L1577,744 Q1577,752 1569,752 L1411,752 Q1403,752 1403,744 Z"/>
+  </g>
+  <!-- windshield -->
+  <path d="M1417,660 Q1417,606 1462,600 L1518,600 Q1563,606 1563,660 L1563,668 L1417,668 Z" fill="#123454" stroke="#9FBEDB" stroke-width="1.5"/>
+  <!-- teal cab cap -->
+  <path d="M1403,744 L1403,676 L1577,676 L1577,744 Q1577,752 1569,752 L1411,752 Q1403,752 1403,744 Z" fill="#12B3A6" opacity="0.9"/>
+  <!-- tusk LEDs: angled columns -->
+  <path d="M1428,738 q-4,-30 14,-46 l10,8 q-14,14 -12,38 z" fill="#CFEFFF"/>
+  <path d="M1552,738 q4,-30 -14,-46 l-10,8 q14,14 12,38 z" fill="#CFEFFF"/>
+  <!-- destination display -->
+  <rect x="1444" y="584" width="92" height="12" fill="#0A2239" stroke="#9FBEDB" stroke-width="1"/>
+  <g stroke="#7FD1FF" stroke-width="1.2" fill="none">
+    <line x1="1403" y1="548" x2="1577" y2="548" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="1620" y1="576" x2="1620" y2="810" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="1660" y1="752" x2="1660" y2="810" marker-start="url(#al)" marker-end="url(#ar)"/>
+  </g>
+  <text x="1490" y="540" fill="#7FD1FF" font-size="15" text-anchor="middle">2.90</text>
+  <text x="1628" y="700" fill="#7FD1FF" font-size="14" transform="rotate(90 1628 700)">3.90</text>
+  <text x="1668" y="784" fill="#7FD1FF" font-size="12" transform="rotate(90 1668 784)">1.10</text>
+  <text x="1330" y="850" fill="#7FD1FF" font-size="14">GAUGE 1.435 · NO PANTOGRAPH (3RD RAIL)</text>
+
+  <!-- ============ PLAN VIEW (scale 27 px/m) ============ -->
+  <text x="100" y="940" fill="#E8F1FF" font-size="26" font-weight="bold">PLAN — DMC ROOF</text>
+  <text x="100" y="966" fill="#7FD1FF" font-size="16">scale 27 px/m · roof: AC units ×2, no pantograph well</text>
+  <!-- 22.6m=610px from x=140; width 2.9m=78px centered y=1040 -->
+  <g stroke="#E8F1FF" stroke-width="2" fill="none">
+    <path d="M162,1001 Q140,1040 162,1079 L742,1079 Q750,1079 750,1071 L750,1009 Q750,1001 742,1001 Z"/>
+  </g>
+  <rect x="250" y="1014" width="120" height="52" fill="none" stroke="#9FBEDB" stroke-width="1.5"/>
+  <rect x="540" y="1014" width="120" height="52" fill="none" stroke="#9FBEDB" stroke-width="1.5"/>
+  <text x="310" y="1045" fill="#9FBEDB" font-size="13" text-anchor="middle">AC UNIT</text>
+  <text x="600" y="1045" fill="#9FBEDB" font-size="13" text-anchor="middle">AC UNIT</text>
+  <g stroke="#7FD1FF" stroke-width="1.2" fill="none">
+    <line x1="790" y1="1001" x2="790" y2="1079" marker-start="url(#al)" marker-end="url(#ar)"/>
+  </g>
+  <text x="798" y="1046" fill="#7FD1FF" font-size="14" transform="rotate(90 798 1046)">2.90</text>
+
+  <!-- ============ LIVERY / MATERIAL SWATCHES ============ -->
+  <text x="1000" y="940" fill="#E8F1FF" font-size="26" font-weight="bold">LIVERY + MATERIALS</text>
+  <g font-size="15" fill="#E8F1FF">
+    <rect x="1000" y="965" width="46" height="30" fill="#F2F4F5" stroke="#7FD1FF"/><text x="1058" y="986">BODY: brushed alu-white  #F2F4F5 · metal 0.25 rough 0.35</text>
+    <rect x="1000" y="1005" width="46" height="30" fill="#12B3A6"/><text x="1058" y="1026">KMRL TEAL band + cab cap  #12B3A6 (backwaters teal)</text>
+    <rect x="1000" y="1045" width="46" height="30" fill="#2E8B57"/><text x="1058" y="1066">DEEP GREEN accent stripe  #2E8B57</text>
+    <rect x="1000" y="1085" width="46" height="30" fill="#1E2A30"/><text x="1058" y="1106">WINDOW BAND glass  #1E2A30 · metal 0.6 rough 0.1</text>
+    <rect x="1000" y="1125" width="46" height="30" fill="#D6E64B"/><text x="1058" y="1146">INTERIOR lemon-green seats  #D6E64B (longitudinal, 136/car)</text>
+    <rect x="1000" y="1165" width="46" height="30" fill="#CFEFFF"/><text x="1058" y="1186">TUSK LED emissive  #CFEFFF · name material "LED" for night glow</text>
+  </g>
+  <g font-size="15" fill="#7FD1FF">
+    <text x="100" y="1130">BLENDER NOTES:</text>
+    <text x="100" y="1156">· 1 BU = 1 m — model at true scale, origin at rail level, centre of car, +Y forward</text>
+    <text x="100" y="1182">· capacity 975 pax/set · max 80 km/h · 25 trainsets in fleet</text>
+    <text x="100" y="1208">· poly budget ≤ 15k tris/car · one 2k atlas + emissive map · export .glb</text>
+    <text x="100" y="1234">· game uses 3 separate car objects so the set bends on curves — export ONE car,</text>
+    <text x="100" y="1260">  cab variant + trailer variant (or cab car with removable cab piece)</text>
+  </g>
+
+  <!-- scale bar 10m at 27px/m -->
+  <g stroke="#E8F1FF" stroke-width="3">
+    <line x1="1540" y1="1260" x2="1810" y2="1260"/>
+    <line x1="1540" y1="1252" x2="1540" y2="1268"/>
+    <line x1="1675" y1="1254" x2="1675" y2="1266"/>
+    <line x1="1810" y1="1252" x2="1810" y2="1268"/>
+  </g>
+  <text x="1545" y="1246" fill="#E8F1FF" font-size="14">0        5        10 m  (27 px/m sheet scale)</text>
+</svg>

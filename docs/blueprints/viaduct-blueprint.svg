@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2200 1400" font-family="Consolas, monospace">
+  <defs>
+    <marker id="ar" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 z" fill="#7FD1FF"/>
+    </marker>
+    <marker id="al" markerWidth="10" markerHeight="8" refX="1" refY="4" orient="auto">
+      <path d="M9,0 L0,4 L9,8 z" fill="#7FD1FF"/>
+    </marker>
+    <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+      <path d="M30 0 H0 V30" fill="none" stroke="#123454" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+  <rect width="2200" height="1400" fill="#0A2239"/>
+  <rect width="2200" height="1400" fill="url(#grid)"/>
+
+  <rect x="1520" y="1290" width="660" height="90" fill="none" stroke="#7FD1FF" stroke-width="1.5"/>
+  <text x="1540" y="1322" fill="#E8F1FF" font-size="24" font-weight="bold">KOCHI METRO — VIADUCT: PIER + TWIN U-GIRDER</text>
+  <text x="1540" y="1348" fill="#7FD1FF" font-size="15">SHEET 2/3 · ALL DIMENSIONS IN METRES · DMRC-BUILT PHASE 1</text>
+  <text x="1540" y="1370" fill="#7FD1FF" font-size="15">CONFIRMED: SPAN 25.0 · PIER Ø1.60 · PILE CAP Ø3.60 (IJISET V5-I4)</text>
+
+  <!-- ============ CROSS-SECTION (scale 55 px/m) ============ -->
+  <text x="120" y="70" fill="#E8F1FF" font-size="26" font-weight="bold">CROSS-SECTION AT PIER</text>
+  <text x="120" y="96" fill="#7FD1FF" font-size="16">scale 55 px/m · rail level +12.50 typ (varies 9–14 along line)</text>
+
+  <!-- ground y=1180; rail level 12.5m -> y=1180-687.5=492.5 -->
+  <line x1="80" y1="1180" x2="1080" y2="1180" stroke="#4A7396" stroke-width="3"/>
+  <text x="90" y="1204" fill="#4A7396" font-size="14">ROAD MEDIAN LEVEL ±0.00</text>
+
+  <!-- pile cap: dia 3.6m=198px, height ~1.5m above ground shown partly buried: show 0.5 above -->
+  <rect x="481" y="1152" width="198" height="28" fill="none" stroke="#E8F1FF" stroke-width="2"/>
+  <text x="690" y="1172" fill="#9FBEDB" font-size="13">PILE CAP Ø3.60 (mostly buried)</text>
+
+  <!-- pier shaft: circular Ø1.6m=88px, from pile cap top (1152) to pier cap bottom -->
+  <!-- pier cap: bottom at deck soffit minus cap depth; U-girder depth 1.90m=104.5px; deck top=rail-0.3? define: girder soffit y=492.5+0.35*55(rail above girder floor 0.35)= ... simpler: top of U web = rail+? Use: U-girder overall depth 1.90, rail sits 0.35 above girder floor slab (inside trough). Girder top flange y = rail-1.0m? Draw: trough floor y = 492.5+19.25=511.75 girder soffit y=511.75+ (slab 0.30)*55 ... let's set: soffit (underside) y = 597 (i.e., underside = rail+1.9? no: underside BELOW rail by (1.9-1.55)? -->
+  <!-- Simplify with standard: U-girder depth 1.90 from soffit to top of web. Rail level = soffit + 0.65. Web top = soffit + 1.90 (parapet). soffit y = 492.5+0.65*55 = 528.25; web top y = 528.25-1.9*55 = 423.75 -->
+  <!-- pier cap: 8.80m wide=484px, depth 1.40m=77px, under soffit -->
+  <rect x="338" y="528" width="484" height="77" fill="none" stroke="#E8F1FF" stroke-width="2.5"/>
+  <text x="580" y="575" fill="#9FBEDB" font-size="14" text-anchor="middle">PIER CAP 8.80 × 1.40 (hammerhead, tapers to 0.90 at tips)</text>
+  <!-- shaft -->
+  <rect x="536" y="605" width="88" height="547" fill="none" stroke="#E8F1FF" stroke-width="2.5"/>
+  <ellipse cx="580" cy="605" rx="44" ry="10" fill="none" stroke="#E8F1FF" stroke-width="1.5"/>
+  <text x="640" y="900" fill="#E8F1FF" font-size="15">PIER SHAFT Ø1.60 CIRCULAR</text>
+  <text x="640" y="924" fill="#7FD1FF" font-size="14">clear height ≈ 10.5 (road→cap)</text>
+
+  <!-- twin U-girders: each 4.10m wide=225.5px, gap 0.10m; centres at track centres 4.20m apart=231px -->
+  <!-- left girder outer x from 580-231/2-225.5/2 ... centre_track_L x = 580-115.5=464.5; girder from 464.5-112.75=351.75 to 577.25 -->
+  <g stroke="#E8F1FF" stroke-width="2.5" fill="none">
+    <!-- left U: outline (soffit 528.25, web top 423.75) -->
+    <path d="M352,528 L352,424 L369,424 L369,494 L560,494 L560,424 L577,424 L577,528 Z"/>
+    <!-- right U -->
+    <path d="M583,528 L583,424 L600,424 L600,494 L791,494 L791,424 L808,424 L808,528 Z"/>
+  </g>
+  <!-- rails inside troughs: rail level 492.5, plinths -->
+  <g stroke="#66E3D2" stroke-width="2">
+    <line x1="405" y1="493" x2="405" y2="484"/><line x1="524" y1="493" x2="524" y2="484"/>
+    <line x1="636" y1="493" x2="636" y2="484"/><line x1="755" y1="493" x2="755" y2="484"/>
+  </g>
+  <text x="464" y="478" fill="#66E3D2" font-size="12" text-anchor="middle">1.435 GAUGE</text>
+  <text x="695" y="478" fill="#66E3D2" font-size="12" text-anchor="middle">3RD RAIL AT WEB</text>
+
+  <!-- cable trough / walkway between webs -->
+  <text x="580" y="415" fill="#9FBEDB" font-size="12" text-anchor="middle">WEB TOP = WALKWAY/PARAPET</text>
+
+  <!-- dims -->
+  <g stroke="#7FD1FF" stroke-width="1.2" fill="none">
+    <line x1="352" y1="380" x2="808" y2="380" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="352" y1="404" x2="577" y2="404" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="464" y1="640" x2="695" y2="640" marker-start="url(#al)" marker-end="url(#ar)" stroke-dasharray="4 4"/>
+    <line x1="900" y1="424" x2="900" y2="528" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="950" y1="492" x2="950" y2="1180" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="290" y1="605" x2="290" y2="1152" marker-start="url(#al)" marker-end="url(#ar)"/>
+  </g>
+  <text x="580" y="372" fill="#7FD1FF" font-size="16" text-anchor="middle">DECK OVERALL ≈ 8.30</text>
+  <text x="464" y="398" fill="#7FD1FF" font-size="14" text-anchor="middle">U-GIRDER 4.10</text>
+  <text x="580" y="662" fill="#7FD1FF" font-size="13" text-anchor="middle">TRACK CENTRES 4.20</text>
+  <text x="908" y="476" fill="#7FD1FF" font-size="13" transform="rotate(90 908 476)">1.90 DEPTH</text>
+  <text x="958" y="830" fill="#7FD1FF" font-size="14" transform="rotate(90 958 830)">RAIL LEVEL +12.50</text>
+  <text x="284" y="880" fill="#7FD1FF" font-size="13" transform="rotate(-90 284 880)">SHAFT ≈ 10.0</text>
+
+  <!-- ============ LONGITUDINAL ELEVATION (scale 16 px/m) ============ -->
+  <text x="1180" y="70" fill="#E8F1FF" font-size="26" font-weight="bold">LONGITUDINAL ELEVATION</text>
+  <text x="1180" y="96" fill="#7FD1FF" font-size="16">scale 16 px/m · simply-supported spans of 25.00 (Ph-2 uses 28.00)</text>
+
+  <!-- ground y=560, rail 12.5m*16=200 -> rail y=360; girder soffit y=360+10=370.4; depth 30.4 -->
+  <line x1="1140" y1="560" x2="2140" y2="560" stroke="#4A7396" stroke-width="3"/>
+  <!-- three piers at 25m=400px: x=1240,1640,2040 -->
+  <g stroke="#E8F1FF" stroke-width="2" fill="none">
+    <g id="pierE">
+      <rect x="1227" y="376" width="26" height="184"/>
+      <rect x="1170" y="354" width="140" height="22"/>
+    </g>
+    <use href="#pierE" x="400"/>
+    <use href="#pierE" x="800"/>
+    <!-- girder band: soffit 354-30=324; top of web 324-? show deck band rail~333 -->
+    <rect x="1140" y="324" width="1000" height="30"/>
+  </g>
+  <!-- expansion joints above piers -->
+  <g stroke="#66E3D2" stroke-width="1.5">
+    <line x1="1240" y1="324" x2="1240" y2="354"/>
+    <line x1="1640" y1="324" x2="1640" y2="354"/>
+    <line x1="2040" y1="324" x2="2040" y2="354"/>
+  </g>
+  <text x="1650" y="316" fill="#9FBEDB" font-size="13">JOINT OVER EACH PIER (span is simply supported)</text>
+  <g stroke="#7FD1FF" stroke-width="1.2" fill="none">
+    <line x1="1240" y1="256" x2="1640" y2="256" marker-start="url(#al)" marker-end="url(#ar)"/>
+    <line x1="1640" y1="256" x2="2040" y2="256" marker-start="url(#al)" marker-end="url(#ar)"/>
+  </g>
+  <text x="1440" y="248" fill="#7FD1FF" font-size="16" text-anchor="middle">25.00</text>
+  <text x="1840" y="248" fill="#7FD1FF" font-size="16" text-anchor="middle">25.00</text>
+
+  <!-- pier variations note -->
+  <g fill="#7FD1FF" font-size="15">
+    <text x="1180" y="640">VARIANTS TO MODEL:</text>
+    <text x="1180" y="666">· STANDARD: single Ø1.6 shaft + hammerhead cap (90% of line)</text>
+    <text x="1180" y="692">· PORTAL: two shafts + crossbeam — at road crossings/curves</text>
+    <text x="1180" y="718">· STATION PIERS: paired shafts under the station box, Ø1.2, 8m grid</text>
+    <text x="1180" y="744">· CANTILEVER ARM piers where line hugs the road edge</text>
+    <text x="1180" y="790">MATERIAL: fair-faced concrete #C9CCCE rough 0.9,</text>
+    <text x="1180" y="816">stain streaks + drip marks via vertex paint / AO texture;</text>
+    <text x="1180" y="842">girder outer face has KMRL teal pinstripe along the parapet.</text>
+    <text x="1180" y="888">GAME INTEGRATION: pier .glb is instanced ~900×,</text>
+    <text x="1180" y="914">keep ≤ 2k tris; deck stays procedural (follows real curve).</text>
+    <text x="1180" y="940">Model pier so origin = ground centre; +Z up; cap along ±X.</text>
+  </g>
+
+  <!-- scale bar -->
+  <g stroke="#E8F1FF" stroke-width="3">
+    <line x1="120" y1="1260" x2="670" y2="1260"/>
+    <line x1="120" y1="1252" x2="120" y2="1268"/>
+    <line x1="395" y1="1254" x2="395" y2="1266"/>
+    <line x1="670" y1="1252" x2="670" y2="1268"/>
+  </g>
+  <text x="125" y="1246" fill="#E8F1FF" font-size="14">0            5            10 m  (55 px/m cross-section scale)</text>
+</svg>
