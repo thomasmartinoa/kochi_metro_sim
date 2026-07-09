@@ -14,7 +14,7 @@ import { TimeControls } from './TimeControls'
 
 function Brand() {
   return (
-    <div className="hud-panel pointer-events-auto flex items-center gap-3 px-4 py-2.5">
+    <div className="hud-panel pointer-events-auto hidden items-center gap-3 px-4 py-2.5 sm:flex">
       <div className="flex h-8 w-8 items-center justify-center rounded-md bg-kmrl font-display text-lg font-bold text-ink">
         K
       </div>

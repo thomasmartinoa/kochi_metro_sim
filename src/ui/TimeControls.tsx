@@ -7,7 +7,13 @@ import { serviceStatusAt } from '../sim/engine'
 import { fmtTime } from '../sim/clock'
 import { useSimStore } from '../state/useSimStore'
 
-const SPEEDS = [1, 5, 15, 60, 300]
+const SPEEDS: { n: number; hideMobile?: boolean }[] = [
+  { n: 1 },
+  { n: 5, hideMobile: true },
+  { n: 15 },
+  { n: 60, hideMobile: true },
+  { n: 300 },
+]
 
 export function TimeControls() {
   const clockMode = useSimStore((s) => s.clockMode)
@@ -46,16 +52,16 @@ export function TimeControls() {
           />
           LIVE
         </button>
-        <span className="font-mono text-2xl font-semibold tabular-nums text-paper">
+        <span className="font-mono text-2xl font-semibold tabular-nums text-paper max-sm:text-xl">
           {fmtClock(daySec)}
         </span>
         <span className="font-display text-[11px] tracking-widest text-paper-dim">IST</span>
         <div className="ml-auto flex items-center gap-1">
-          {SPEEDS.map((n) => (
+          {SPEEDS.map(({ n, hideMobile }) => (
             <button
               key={n}
               onClick={() => setSpeed(n)}
-              className={`rounded px-2 py-0.5 font-mono text-[11px] ${
+              className={`rounded px-2 py-0.5 font-mono text-[11px] ${hideMobile ? 'max-sm:hidden ' : ''}${
                 clockMode === 'scrub' && speed === n
                   ? 'bg-lemon/90 font-semibold text-ink'
                   : 'text-paper-dim hover:bg-panel hover:text-paper'
