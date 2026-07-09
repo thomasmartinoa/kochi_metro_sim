@@ -2,7 +2,7 @@
  * Live trains — a pooled set of 3-car Metropolis models driven by the engine
  * every frame from the shared sim clock. Pooling avoids React churn.
  */
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { TRAINSET } from '../data/trainset'
@@ -77,6 +77,7 @@ export function Trains() {
   const groupRefs = useRef<(THREE.Group | null)[]>([])
   const statesRef = useRef<TrainState[]>([])
   const select = useSimStore((s) => s.select)
+  const camera = useThree((s) => s.camera)
 
   const pose = useMemo(() => ({ pos: new THREE.Vector3(), heading: new THREE.Vector3() }), [])
   const lookTarget = useMemo(() => new THREE.Vector3(), [])
@@ -106,6 +107,16 @@ export function Trains() {
         lookTarget.copy(pose.pos).add(pose.heading)
         car.lookAt(lookTarget)
       }
+      // floating marker above the middle car — always visible & clickable
+      const marker = g.children[3] as THREE.Group
+      const mid = g.children[1] as THREE.Group
+      marker.position.set(mid.position.x, mid.position.y + 11, mid.position.z)
+      marker.quaternion.copy(camera.quaternion)
+      const markerMesh = marker.children[0] as THREE.Mesh
+      markerMesh.material = st.dir === 0 ? mat.markerUp : mat.markerDown
+      const sel = useSimStore.getState().selection
+      const isSelected = sel?.kind === 'train' && sel.id === st.tripId
+      marker.scale.setScalar(isSelected ? 1.5 : 1)
     }
   })
 
@@ -125,6 +136,15 @@ export function Trains() {
           }}
         >
           <TrainModel />
+          {/* marker (children[3]): billboarded map-pin disc */}
+          <group>
+            <mesh>
+              <circleGeometry args={[4.2, 24]} />
+            </mesh>
+            <mesh position={[0, 0, -0.1]} material={mat.markerRing}>
+              <ringGeometry args={[4.2, 5.2, 24]} />
+            </mesh>
+          </group>
         </group>
       ))}
     </group>

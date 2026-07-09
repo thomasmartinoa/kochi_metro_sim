@@ -124,6 +124,45 @@ export function liveTrainStates(epochMs: number): TrainState[] {
   return [...today, ...yesterdayTail]
 }
 
+/** Live state of one trip by id (or null if not running now). */
+export function trainStateById(epochMs: number, tripId: string): TrainState | null {
+  const trip = trips.find((t) => t.id === tripId)
+  if (!trip) return null
+  const { daySec, dow } = istDayTime(epochMs)
+  if (trip.service === serviceForDow(dow)) {
+    const st = tripStateAt(trip, daySec)
+    if (st) return st
+  }
+  if (trip.service === serviceForDow((dow + 6) % 7)) {
+    return tripStateAt(trip, daySec + DAY_SEC)
+  }
+  return null
+}
+
+/** Upcoming departures from a station for a real epoch (IST + service aware). */
+export function departuresAt(
+  epochMs: number,
+  stationOrder: number,
+  limit = 4,
+): { tripId: string; dir: 0 | 1; depSec: number; destOrder: number; inSec: number }[] {
+  const { daySec, dow } = istDayTime(epochMs)
+  return departuresFrom(stationOrder, daySec, serviceForDow(dow), limit).map((d) => ({
+    ...d,
+    inSec: d.depSec - daySec,
+  }))
+}
+
+/** Journey plan for a real epoch (IST + service aware). */
+export function planJourneyAt(
+  epochMs: number,
+  fromOrder: number,
+  toOrder: number,
+): { departSec: number; arriveSec: number; tripId: string; waitSec: number } | null {
+  const { daySec, dow } = istDayTime(epochMs)
+  const j = planJourney(fromOrder, toOrder, daySec, serviceForDow(dow))
+  return j ? { ...j, waitSec: j.departSec - daySec } : null
+}
+
 export interface ServiceStatus {
   open: boolean
   /** next first-departure daySec if closed */

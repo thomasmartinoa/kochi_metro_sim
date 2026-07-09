@@ -8,6 +8,7 @@ import type * as THREE from 'three'
 import { centerAt } from '../sim/alignment'
 import { useSimStore } from '../state/useSimStore'
 import { mat } from './materials'
+import { CameraRig } from './CameraRig'
 import { Line3D } from './Line3D'
 import { Trains } from './Trains'
 
@@ -66,6 +67,7 @@ export function World() {
       <Line3D />
       <Trains />
       <ClockTick />
+      <CameraRig />
       <DevCam />
 
       <OrbitControls

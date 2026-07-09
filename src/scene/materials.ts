@@ -39,6 +39,9 @@ export const mat = {
     emissive: COLORS.accentLemon,
     emissiveIntensity: 0,
   }),
+  markerUp: new THREE.MeshBasicMaterial({ color: COLORS.kmrlTurquoise }),
+  markerDown: new THREE.MeshBasicMaterial({ color: COLORS.accentLemon }),
+  markerRing: new THREE.MeshBasicMaterial({ color: '#0A1620' }),
   ground: new THREE.MeshStandardMaterial({ color: '#8FAE7E', roughness: 1 }),
   water: new THREE.MeshStandardMaterial({
     color: COLORS.water,
