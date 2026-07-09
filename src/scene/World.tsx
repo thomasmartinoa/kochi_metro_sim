@@ -6,6 +6,7 @@ import { OrbitControls } from '@react-three/drei'
 import { useEffect } from 'react'
 import type * as THREE from 'three'
 import { centerAt } from '../sim/alignment'
+import { useDispatchStore } from '../state/useDispatchStore'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { mat } from './materials'
@@ -17,10 +18,11 @@ import { Line3D } from './Line3D'
 import { PinkLine } from './PinkLine'
 import { Trains } from './Trains'
 
-/** Advances the shared sim clock once per frame. */
+/** Advances the shared sim clock (and the dispatch session) once per frame. */
 function ClockTick() {
   useFrame((_, dt) => {
     useSimStore.getState().tick(Math.min(dt, 0.25) * 1000)
+    useDispatchStore.getState().tick(useSimStore.getState().epochMs)
   })
   return null
 }

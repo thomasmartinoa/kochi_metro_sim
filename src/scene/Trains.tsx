@@ -8,6 +8,7 @@ import * as THREE from 'three'
 import { TRAINSET } from '../data/trainset'
 import { liveTrainStates, type TrainState } from '../sim/engine'
 import { poseAt } from '../sim/alignment'
+import { useDispatchStore } from '../state/useDispatchStore'
 import { useSimStore } from '../state/useSimStore'
 import { mat } from './materials'
 
@@ -84,7 +85,9 @@ export function Trains() {
 
   useFrame(() => {
     const epochMs = useSimStore.getState().epochMs
-    const states = liveTrainStates(epochMs)
+    const dispatch = useDispatchStore.getState()
+    const dispatching = useSimStore.getState().appMode === 'dispatch' && dispatch.session
+    const states = dispatching ? dispatch.statesAt(epochMs) : liveTrainStates(epochMs)
     statesRef.current = states
     for (let i = 0; i < POOL; i++) {
       const g = groupRefs.current[i]
@@ -113,7 +116,15 @@ export function Trains() {
       marker.position.set(mid.position.x, mid.position.y + 11, mid.position.z)
       marker.quaternion.copy(camera.quaternion)
       const markerMesh = marker.children[0] as THREE.Mesh
-      markerMesh.material = st.dir === 0 ? mat.markerUp : mat.markerDown
+      const alert =
+        dispatching &&
+        (dispatch.incidents.some((i) => i.tripId === st.tripId) ||
+          (dispatch.delays[st.tripId] ?? 0) > 30)
+      markerMesh.material = alert
+        ? mat.markerAlert
+        : st.dir === 0
+          ? mat.markerUp
+          : mat.markerDown
       const sel = useSimStore.getState().selection
       const isSelected = sel?.kind === 'train' && sel.id === st.tripId
       marker.scale.setScalar(isSelected ? 1.5 : 1)

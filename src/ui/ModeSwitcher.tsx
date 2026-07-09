@@ -6,7 +6,7 @@ const MODES: { id: AppMode; label: string; ready: boolean }[] = [
   { id: 'tracker', label: 'Tracker', ready: true },
   { id: 'explore', label: 'Explore', ready: true },
   { id: 'drive', label: 'Drive', ready: true },
-  { id: 'dispatch', label: 'Dispatch', ready: false },
+  { id: 'dispatch', label: 'Dispatch', ready: true },
 ]
 
 export function ModeSwitcher() {
