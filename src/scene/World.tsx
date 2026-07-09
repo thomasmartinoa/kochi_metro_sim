@@ -6,11 +6,13 @@ import { OrbitControls } from '@react-three/drei'
 import { useEffect } from 'react'
 import type * as THREE from 'three'
 import { centerAt } from '../sim/alignment'
+import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { mat } from './materials'
 import { Atmosphere } from './Atmosphere'
 import { CameraRig } from './CameraRig'
 import { City } from './City'
+import { DriveTrain } from './DriveTrain'
 import { Line3D } from './Line3D'
 import { PinkLine } from './PinkLine'
 import { Trains } from './Trains'
@@ -44,6 +46,11 @@ function DevCam() {
     w.__select = (kind: 'train' | 'station' | null, id?: string) => {
       useSimStore.getState().select(kind && id ? { kind, id } : null)
     }
+    w.__drive = () => useDriveStore.getState().drive
+    w.__driveNotch = (n: number) => {
+      const d = useDriveStore.getState().drive
+      if (d) useDriveStore.getState().nudgeNotch(n - d.notch)
+    }
   }, [camera, controls])
   return null
 }
@@ -72,6 +79,7 @@ export function World() {
       <Line3D />
       <PinkLine />
       <Trains />
+      <DriveTrain />
       <ClockTick />
       <CameraRig />
       <DevCam />

@@ -3,6 +3,7 @@
  * panels, legend, clock deck. Explore mode trims the chrome for immersion.
  */
 import { useSimStore } from '../state/useSimStore'
+import { DrivePanel } from './DrivePanel'
 import { InfoPanel } from './InfoPanel'
 import { Legend } from './Legend'
 import { ModeSwitcher } from './ModeSwitcher'
@@ -29,13 +30,15 @@ function Brand() {
 export function HUD() {
   const appMode = useSimStore((s) => s.appMode)
   const explore = appMode === 'explore'
+  const drive = appMode === 'drive'
+  const tracker = appMode === 'tracker'
 
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4">
       <div className="flex min-h-0 flex-1 items-start justify-between gap-4 pb-4">
         <div className="flex h-full min-h-0 flex-col gap-3">
           <Brand />
-          {!explore && (
+          {tracker && (
             <div className="hidden min-h-0 md:block">
               <StationList />
             </div>
@@ -45,24 +48,32 @@ export function HUD() {
           <ModeSwitcher />
         </div>
         <div className="flex max-h-full flex-col items-end gap-3 overflow-y-auto">
-          <InfoPanel />
-          {!explore && (
-            <div className="hidden sm:block">
-              <RoutePlanner />
-            </div>
-          )}
-          {explore && (
-            <div className="hud-panel pointer-events-auto px-3.5 py-2 font-display text-[11px] text-paper-dim">
-              Drag to fly · click a train to ride along
-            </div>
+          {drive ? (
+            <DrivePanel />
+          ) : (
+            <>
+              <InfoPanel />
+              {tracker && (
+                <div className="hidden sm:block">
+                  <RoutePlanner />
+                </div>
+              )}
+              {explore && (
+                <div className="hud-panel pointer-events-auto px-3.5 py-2 font-display text-[11px] text-paper-dim">
+                  Drag to fly · click a train to ride along
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
       <div className="relative flex items-end justify-between gap-4">
-        <div className="hidden lg:block">{!explore && <Legend />}</div>
-        <div className="absolute left-1/2 bottom-0 w-full max-w-xl -translate-x-1/2">
-          <TimeControls />
-        </div>
+        <div className="hidden lg:block">{tracker && <Legend />}</div>
+        {!drive && (
+          <div className="absolute left-1/2 bottom-0 w-full max-w-xl -translate-x-1/2">
+            <TimeControls />
+          </div>
+        )}
         <div className="ml-auto self-end font-display text-[10px] tracking-wide text-paper-dim/70">
           Contains data provided by Kochi Metro Rail Limited
         </div>

@@ -49,6 +49,8 @@ export function CameraRig() {
 
   useFrame((_, dt) => {
     if (!controls) return
+    // drive mode owns the camera (see DriveTrain)
+    if (useSimStore.getState().appMode === 'drive') return
     const k = Math.min(1, dt * 3.2)
     const sel = useSimStore.getState().selection
 

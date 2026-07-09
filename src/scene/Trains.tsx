@@ -16,7 +16,7 @@ const CAR_LEN = TRAINSET.lengthM / TRAINSET.cars // ~21.7 m
 const CAR_GAP = 0.35
 
 /** One car: body, windows band, doors band, and (optionally) a cab end. */
-function Car({ cabAt }: { cabAt: 'front' | 'back' | null }) {
+export function Car({ cabAt }: { cabAt: 'front' | 'back' | null }) {
   const L = CAR_LEN - CAR_GAP
   return (
     <group>
