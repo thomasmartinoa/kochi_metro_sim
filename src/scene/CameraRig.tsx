@@ -59,7 +59,11 @@ export function CameraRig() {
         const trainPos = tmp.current.copy(pose.current.pos).setY(pose.current.pos.y + 2)
         const offset = camera.position.clone().sub(controls.target)
         // keep a sane follow distance the first time we latch on
-        if (offset.length() > 900) offset.setLength(220)
+        // (explore mode rides closer for immersion)
+        const ride = useSimStore.getState().appMode === 'explore'
+        const maxD = ride ? 320 : 900
+        const snapD = ride ? 85 : 220
+        if (offset.length() > maxD) offset.setLength(snapD)
         controls.target.lerp(trainPos, Math.min(1, dt * 6))
         camera.position.copy(controls.target).add(offset)
         controls.update()

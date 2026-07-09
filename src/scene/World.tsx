@@ -8,8 +8,11 @@ import type * as THREE from 'three'
 import { centerAt } from '../sim/alignment'
 import { useSimStore } from '../state/useSimStore'
 import { mat } from './materials'
+import { Atmosphere } from './Atmosphere'
 import { CameraRig } from './CameraRig'
+import { City } from './City'
 import { Line3D } from './Line3D'
+import { PinkLine } from './PinkLine'
 import { Trains } from './Trains'
 
 /** Advances the shared sim clock once per frame. */
@@ -38,6 +41,9 @@ function DevCam() {
       const { pos } = centerAt(sKm)
       return { x: pos.x, y: pos.y, z: pos.z }
     }
+    w.__select = (kind: 'train' | 'station' | null, id?: string) => {
+      useSimStore.getState().select(kind && id ? { kind, id } : null)
+    }
   }, [camera, controls])
   return null
 }
@@ -55,16 +61,16 @@ export function World() {
     >
       <color attach="background" args={['#BFDDE2']} />
       <fog attach="fog" args={['#BFDDE2', 6000, 30000]} />
-      <hemisphereLight args={['#DFF3F0', '#5C6B58', 1.15]} />
-      <directionalLight position={[4000, 6000, -3000]} intensity={1.6} color="#FFF4DC" />
-      <directionalLight position={[-3500, 2600, 4000]} intensity={0.55} color="#DCEFF5" />
+      <Atmosphere />
 
       {/* ground */}
       <mesh material={mat.ground} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]}>
         <planeGeometry args={[60000, 60000]} />
       </mesh>
 
+      <City />
       <Line3D />
+      <PinkLine />
       <Trains />
       <ClockTick />
       <CameraRig />

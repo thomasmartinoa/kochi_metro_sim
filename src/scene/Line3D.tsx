@@ -113,6 +113,13 @@ function StationModel({ index }: { index: number }) {
           </mesh>
         )),
       )}
+      {/* platform light strips under the roof — glow at night */}
+      <mesh material={mat.platformLight} position={[-6.2, RAIL_LEVEL_M + 4.6, 0]}>
+        <boxGeometry args={[0.6, 0.18, platformLen * 0.9]} />
+      </mesh>
+      <mesh material={mat.platformLight} position={[6.2, RAIL_LEVEL_M + 4.6, 0]}>
+        <boxGeometry args={[0.6, 0.18, platformLen * 0.9]} />
+      </mesh>
       {/* name board */}
       <Text
         font={labelFont}

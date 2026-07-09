@@ -48,4 +48,19 @@ export const mat = {
     roughness: 0.15,
     metalness: 0.1,
   }),
+  building: new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 0.92 }),
+  landmark: new THREE.MeshStandardMaterial({ color: '#E8E4DA', roughness: 0.8 }),
+  palmTrunk: new THREE.MeshStandardMaterial({ color: '#8A6A4C', roughness: 1 }),
+  palmFrond: new THREE.MeshStandardMaterial({ color: '#3E7C4C', roughness: 0.95 }),
+  platformLight: new THREE.MeshStandardMaterial({
+    color: '#F8F3DC',
+    emissive: '#F8ECC0',
+    emissiveIntensity: 0.25,
+  }),
+  pinkLine: new THREE.MeshStandardMaterial({
+    color: COLORS.pinkLine,
+    roughness: 0.6,
+    transparent: true,
+    opacity: 0.75,
+  }),
 }
