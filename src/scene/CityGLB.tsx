@@ -13,7 +13,7 @@ import { useEffect } from 'react'
 import * as THREE from 'three'
 import { project } from '../sim/projection'
 
-const CITY_URL = '/models/kochi-city.glb?v=3'
+const CITY_URL = '/models/kochi-city.glb?v=4'
 const ORIGIN = { lat: 10.021240234375, lon: 76.30382537841797 }
 const LAT_STRETCH = 111320 / 110574
 
