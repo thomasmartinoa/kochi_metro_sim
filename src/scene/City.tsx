@@ -87,7 +87,7 @@ function Buildings() {
   )
 }
 
-function Palms() {
+export function Palms() {
   const { trunks, fronds } = useMemo(() => {
     const rand = mulberry32(9101112)
     const t: THREE.Matrix4[] = []

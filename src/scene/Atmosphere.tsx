@@ -8,6 +8,7 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { istDayTime } from '../sim/clock'
 import { useSimStore } from '../state/useSimStore'
+import { cityEmissives } from './CityGLB'
 import { mat } from './materials'
 
 interface Key {
@@ -81,6 +82,8 @@ export function Atmosphere() {
     mat.trainGlass.emissiveIntensity = night * 0.85
     mat.platformLight.emissiveIntensity = 0.25 + night * 2.2
     mat.led.emissiveIntensity = 1.4 + night * 2.4
+    // real-city facade windows (OSM GLB) light up after dark
+    for (const m of cityEmissives) m.emissiveIntensity = night * 1.15
   })
 
   return (

@@ -3,7 +3,7 @@
  */
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { useEffect } from 'react'
+import { Component, Suspense, useEffect, type ReactNode } from 'react'
 import type * as THREE from 'three'
 import { centerAt } from '../sim/alignment'
 import { useDispatchStore } from '../state/useDispatchStore'
@@ -12,11 +12,23 @@ import { useSimStore } from '../state/useSimStore'
 import { mat } from './materials'
 import { Atmosphere } from './Atmosphere'
 import { CameraRig } from './CameraRig'
-import { City } from './City'
+import { City, Palms } from './City'
+import { CityGLB } from './CityGLB'
 import { DriveTrain } from './DriveTrain'
 import { Line3D } from './Line3D'
 import { PinkLine } from './PinkLine'
 import { Trains } from './Trains'
+
+/** Real-OSM city with the procedural city as loading fallback / error safety net. */
+class CityBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  render() {
+    return this.state.failed ? <City /> : this.props.children
+  }
+}
 
 /** Advances the shared sim clock (and the dispatch session) once per frame. */
 function ClockTick() {
@@ -77,7 +89,12 @@ export function World() {
         <planeGeometry args={[60000, 60000]} />
       </mesh>
 
-      <City />
+      <CityBoundary>
+        <Suspense fallback={<City />}>
+          <CityGLB />
+          <Palms />
+        </Suspense>
+      </CityBoundary>
       <Line3D />
       <PinkLine />
       <Trains />
