@@ -43,7 +43,7 @@ export const mat = {
   markerDown: new THREE.MeshBasicMaterial({ color: COLORS.accentLemon }),
   markerAlert: new THREE.MeshBasicMaterial({ color: COLORS.pinkLine }),
   markerRing: new THREE.MeshBasicMaterial({ color: '#0A1620' }),
-  ground: new THREE.MeshStandardMaterial({ color: '#8FAE7E', roughness: 1 }),
+  ground: new THREE.MeshStandardMaterial({ color: '#5E7A68', roughness: 1 }),
   water: new THREE.MeshStandardMaterial({
     color: COLORS.water,
     roughness: 0.15,

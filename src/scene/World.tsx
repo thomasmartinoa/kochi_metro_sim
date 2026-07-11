@@ -17,6 +17,7 @@ import { CityGLB } from './CityGLB'
 import { DriveTrain } from './DriveTrain'
 import { Line3D } from './Line3D'
 import { PinkLine } from './PinkLine'
+import { SatGround } from './SatGround'
 import { Trains } from './Trains'
 
 /** Real-OSM city with the procedural city as loading fallback / error safety net. */
@@ -81,11 +82,11 @@ export function World() {
       onPointerMissed={() => select(null)}
     >
       <color attach="background" args={['#BFDDE2']} />
-      <fog attach="fog" args={['#BFDDE2', 6000, 30000]} />
+      <fog attach="fog" args={['#BFDDE2', 4500, 19000]} />
       <Atmosphere />
 
-      {/* ground */}
-      <mesh material={mat.ground} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]}>
+      {/* backdrop ground far below the satellite imagery (avoids z-fighting at range) */}
+      <mesh material={mat.ground} rotation={[-Math.PI / 2, 0, 0]} position={[0, -30, 0]}>
         <planeGeometry args={[60000, 60000]} />
       </mesh>
 
@@ -95,6 +96,9 @@ export function World() {
           <Palms />
         </Suspense>
       </CityBoundary>
+      <Suspense fallback={null}>
+        <SatGround />
+      </Suspense>
       <Line3D />
       <PinkLine />
       <Trains />

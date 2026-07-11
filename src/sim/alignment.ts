@@ -1,10 +1,13 @@
 /**
- * Track alignment in world space — built from the REAL GTFS shape polyline.
- * Maps distance-along-line (sKm, the engine's axis) to 3D position + heading.
+ * Track alignment in world space — GTFS shape geometry, laterally snapped to
+ * the OSM road medians the viaduct actually follows (shape-corrected.json,
+ * produced by the Blender pipeline). Distances (sKm) stay the GTFS values so
+ * the timetable engine is untouched.
  * World: +x east, +z south, +y up. Rail level at RAIL_LEVEL_M.
  */
 import { Vector3 } from 'three'
-import { gtfs, stations } from '../data/network'
+import { stations } from '../data/network'
+import correctedShape from '../data/shape-corrected.json'
 import { RAIL_LEVEL_M } from '../data/trainset'
 import { project } from './projection'
 
@@ -16,7 +19,7 @@ interface AlignmentPoint {
 }
 
 function buildPoints(): AlignmentPoint[] {
-  const raw = gtfs.shapeUp.map(([lat, lon, d]) => {
+  const raw = (correctedShape as [number, number, number][]).map(([lat, lon, d]) => {
     const { x, z } = project(lat, lon)
     return { pos: new Vector3(x, RAIL_LEVEL_M, z), sKm: d }
   })

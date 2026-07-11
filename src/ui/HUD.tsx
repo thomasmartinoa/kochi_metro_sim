@@ -77,8 +77,10 @@ export function HUD() {
             <TimeControls />
           </div>
         )}
-        <div className="ml-auto self-end font-display text-[10px] tracking-wide text-paper-dim/70">
+        <div className="ml-auto self-end text-right font-display text-[10px] leading-tight tracking-wide text-paper-dim/70">
           Contains data provided by Kochi Metro Rail Limited
+          <br />
+          Map data © OpenStreetMap contributors · Imagery © Esri, Maxar
         </div>
       </div>
     </div>

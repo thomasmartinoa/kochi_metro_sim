@@ -13,7 +13,7 @@ import { useEffect } from 'react'
 import * as THREE from 'three'
 import { project } from '../sim/projection'
 
-const CITY_URL = '/models/kochi-city.glb'
+const CITY_URL = '/models/kochi-city.glb?v=3'
 const ORIGIN = { lat: 10.021240234375, lon: 76.30382537841797 }
 const LAT_STRETCH = 111320 / 110574
 
@@ -30,6 +30,14 @@ export function CityGLB() {
     const maxAniso = gl.capabilities.getMaxAnisotropy()
     scene.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return
+      // satellite imagery renders real water/vegetation better than vectors
+      if (o.name === 'Water' || o.name === 'Greens' || o.name === 'Forest') {
+        o.visible = false
+        return
+      }
+      // lift roads slightly to avoid z-fighting with the satellite ground
+      if (o.name === 'Roads') o.position.y = 0.7
+      o.updateMatrix()
       o.matrixAutoUpdate = false
       const mats = Array.isArray(o.material) ? o.material : [o.material]
       for (const m of mats) {
@@ -39,6 +47,11 @@ export function CityGLB() {
           if (tex) tex.anisotropy = Math.min(8, maxAniso)
         }
         if (m.map) m.map.needsUpdate = true
+        if (m.name.includes('Water')) {
+          // tame the specular sun-glare hotspot on the backwaters
+          m.roughness = 0.32
+          m.metalness = 0
+        }
         if (m.emissiveMap) {
           m.emissive.set('#F5E9B8')
           m.emissiveIntensity = 0

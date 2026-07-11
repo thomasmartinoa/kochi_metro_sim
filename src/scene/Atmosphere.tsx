@@ -1,8 +1,10 @@
 /**
- * Day/night cycle driven by the sim clock (IST hour). Lerps sky, fog and
- * lighting between keyframes and swings the sun east->west. Also breathes
- * night glow into shared emissive materials (train windows, platform strips).
+ * Day/night cycle driven by the sim clock (IST hour). An atmospheric-scattering
+ * sky dome (drei Sky) with a real sun disk carries the daytime look; keyframed
+ * colours drive fog, lights and the night backdrop. Also breathes night glow
+ * into shared emissive materials (train windows, platform strips, city facades).
  */
+import { Sky } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -33,10 +35,19 @@ const KEYS: Key[] = [
   { h: 24, sky: '#0B1A2B', fog: '#0B1A2B', sun: 0.04, hemi: 0.34, sunColor: '#7C90B8' },
 ]
 
+interface SkyUniforms {
+  sunPosition: { value: THREE.Vector3 }
+  turbidity: { value: number }
+  rayleigh: { value: number }
+  mieCoefficient: { value: number }
+}
+
 export function Atmosphere() {
   const scene = useThree((s) => s.scene)
+  const camera = useThree((s) => s.camera)
   const sunRef = useRef<THREE.DirectionalLight>(null)
   const hemiRef = useRef<THREE.HemisphereLight>(null)
+  const skyRef = useRef<THREE.Mesh<THREE.BoxGeometry, THREE.ShaderMaterial>>(null)
 
   const cols = useMemo(
     () => ({
@@ -48,6 +59,7 @@ export function Atmosphere() {
     }),
     [],
   )
+  const sunDir = useMemo(() => new THREE.Vector3(), [])
 
   useFrame(() => {
     const { daySec } = istDayTime(useSimStore.getState().epochMs)
@@ -64,13 +76,36 @@ export function Atmosphere() {
     const sunI = THREE.MathUtils.lerp(a.sun, b.sun, f)
     const hemiI = THREE.MathUtils.lerp(a.hemi, b.hemi, f)
 
+    // sun path: rises east 06:00, sets west 18:00, slight southern declination
+    const ang = ((h - 6) / 12) * Math.PI
+    sunDir.set(Math.cos(ang), Math.sin(ang) * 0.95, -0.32).normalize()
+    const daylight = sunDir.y > -0.06
+
     if (scene.background instanceof THREE.Color) scene.background.copy(cols.sky)
     else scene.background = cols.sky.clone()
-    if (scene.fog) scene.fog.color.copy(cols.fog)
+    if (scene.fog) {
+      scene.fog.color.copy(cols.fog)
+      // haze hides the map edge at street level but thins out from the air
+      const alt = Math.max(0, camera.position.y)
+      const fog = scene.fog as THREE.Fog
+      fog.near = 4500 + alt * 2.4
+      fog.far = 19000 + alt * 4.0
+    }
+
+    // sky dome: follow the sun, thicken haze toward dawn/dusk, hide at night
+    if (skyRef.current) {
+      skyRef.current.visible = daylight
+      const u = (skyRef.current.material as THREE.ShaderMaterial)
+        .uniforms as unknown as SkyUniforms
+      u.sunPosition.value.copy(sunDir)
+      u.turbidity.value = 10 - sunI * 4.5
+      u.rayleigh.value = 1.0 + (1 - Math.min(1, sunI / 1.4)) * 1.6
+      u.mieCoefficient.value = 0.004 + (1 - Math.min(1, sunI / 1.4)) * 0.006
+    }
 
     if (sunRef.current) {
-      const ang = ((h - 6) / 12) * Math.PI // east at 06:00, west at 18:00
-      sunRef.current.position.set(Math.cos(ang) * 6000, Math.max(600, Math.sin(ang) * 6000), -2500)
+      sunRef.current.position.copy(sunDir).multiplyScalar(8000)
+      sunRef.current.position.y = Math.max(600, sunRef.current.position.y)
       sunRef.current.intensity = sunI
       sunRef.current.color.copy(cols.sun)
     }
@@ -88,6 +123,15 @@ export function Atmosphere() {
 
   return (
     <>
+      <Sky
+        ref={skyRef}
+        distance={42000}
+        sunPosition={[1, 0.5, -0.32]}
+        turbidity={6}
+        rayleigh={1.2}
+        mieCoefficient={0.005}
+        mieDirectionalG={0.82}
+      />
       <hemisphereLight ref={hemiRef} args={['#DFF3F0', '#5C6B58', 1.1]} />
       <directionalLight ref={sunRef} position={[4000, 6000, -2500]} intensity={1.6} color="#FFF4DC" />
       <directionalLight position={[-3500, 2600, 4000]} intensity={0.4} color="#DCEFF5" />
