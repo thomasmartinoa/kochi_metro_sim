@@ -4,7 +4,7 @@
  */
 import { create } from 'zustand'
 
-export type AppMode = 'tracker' | 'explore' | 'drive' | 'dispatch'
+export type AppMode = 'tracker' | 'explore' | 'drive'
 
 export interface Selection {
   kind: 'train' | 'station'

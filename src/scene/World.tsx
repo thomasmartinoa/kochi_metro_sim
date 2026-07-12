@@ -6,7 +6,6 @@ import { OrbitControls } from '@react-three/drei'
 import { Component, Suspense, useEffect, type ReactNode } from 'react'
 import type * as THREE from 'three'
 import { centerAt } from '../sim/alignment'
-import { useDispatchStore } from '../state/useDispatchStore'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { mat } from './materials'
@@ -31,11 +30,10 @@ class CityBoundary extends Component<{ children: ReactNode }, { failed: boolean 
   }
 }
 
-/** Advances the shared sim clock (and the dispatch session) once per frame. */
+/** Advances the shared sim clock once per frame. */
 function ClockTick() {
   useFrame((_, dt) => {
     useSimStore.getState().tick(Math.min(dt, 0.25) * 1000)
-    useDispatchStore.getState().tick(useSimStore.getState().epochMs)
   })
   return null
 }

@@ -3,7 +3,6 @@
  * panels, legend, clock deck. Explore mode trims the chrome for immersion.
  */
 import { useSimStore } from '../state/useSimStore'
-import { DispatchPanel } from './DispatchPanel'
 import { DrivePanel } from './DrivePanel'
 import { InfoPanel } from './InfoPanel'
 import { Legend } from './Legend'
@@ -51,8 +50,6 @@ export function HUD() {
         <div className="flex max-h-full flex-col items-end gap-3 overflow-y-auto">
           {drive ? (
             <DrivePanel />
-          ) : appMode === 'dispatch' ? (
-            <DispatchPanel />
           ) : (
             <>
               <InfoPanel />
