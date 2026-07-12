@@ -14,6 +14,7 @@ import { CameraRig } from './CameraRig'
 import { City, Palms } from './City'
 import { CityGLB } from './CityGLB'
 import { DriveTrain } from './DriveTrain'
+import { KeyboardFly } from './KeyboardFly'
 import { Line3D } from './Line3D'
 import { PinkLine } from './PinkLine'
 import { SatGround } from './SatGround'
@@ -103,6 +104,7 @@ export function World() {
       <DriveTrain />
       <ClockTick />
       <CameraRig />
+      <KeyboardFly />
       <DevCam />
 
       <OrbitControls

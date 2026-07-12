@@ -58,9 +58,12 @@ export function HUD() {
                   <RoutePlanner />
                 </div>
               )}
-              {explore && (
-                <div className="hud-panel pointer-events-auto px-3.5 py-2 font-display text-[11px] text-paper-dim">
-                  Drag to fly · click a train to ride along
+              {(explore || tracker) && (
+                <div className="hud-panel pointer-events-auto hidden px-3.5 py-2 font-display text-[11px] text-paper-dim sm:block">
+                  <span className="font-mono text-kmrl">WASD</span> move ·{' '}
+                  <span className="font-mono text-kmrl">Q/E</span> height ·{' '}
+                  <span className="font-mono text-kmrl">Shift</span> fast
+                  {explore && ' · click a train to ride along'}
                 </div>
               )}
             </>
