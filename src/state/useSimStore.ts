@@ -1,17 +1,21 @@
 /**
- * Global sim state — the single clock both tracker and game read.
+ * Global sim state — the single clock every experience reads.
  * mode 'live': clock follows real IST time. mode 'scrub': user-controlled, advances at `speed`.
+ * `experience` picks the product surface (landing / metro / water); it is
+ * synced with the URL hash (#/, #/metro, #/water) in App.tsx.
  */
 import { create } from 'zustand'
 
+export type Experience = 'landing' | 'metro' | 'water'
 export type AppMode = 'tracker' | 'explore' | 'drive'
 
 export interface Selection {
-  kind: 'train' | 'station'
+  kind: 'train' | 'station' | 'boat' | 'terminal'
   id: string
 }
 
 interface SimStore {
+  experience: Experience
   appMode: AppMode
   /** authoritative sim time as UTC epoch ms */
   epochMs: number
@@ -20,6 +24,7 @@ interface SimStore {
   speed: number
   selection: Selection | null
 
+  setExperience: (e: Experience) => void
   setAppMode: (m: AppMode) => void
   goLive: () => void
   /** jump the clock so IST time-of-day becomes daySec (stays on today) */
@@ -34,12 +39,20 @@ const IST_OFFSET_MS = 5.5 * 3600 * 1000
 const DAY_MS = 86_400_000
 
 export const useSimStore = create<SimStore>((set, get) => ({
+  experience: 'landing',
   appMode: 'tracker',
   epochMs: Date.now(),
   clockMode: 'live',
   speed: 1,
   selection: null,
 
+  setExperience: (e) =>
+    set((s) => ({
+      experience: e,
+      selection: null,
+      // drive mode is metro-only
+      appMode: e === 'water' && s.appMode === 'drive' ? 'tracker' : s.appMode,
+    })),
   setAppMode: (m) => set({ appMode: m }),
   goLive: () => set({ clockMode: 'live', speed: 1, epochMs: Date.now() }),
   scrubToDaySec: (daySec) => {

@@ -63,4 +63,23 @@ export const mat = {
     transparent: true,
     opacity: 0.75,
   }),
+  // --- water metro ---
+  boatHull: new THREE.MeshStandardMaterial({ color: '#F4F6F7', roughness: 0.4, metalness: 0.15 }),
+  boatBand: new THREE.MeshStandardMaterial({ color: COLORS.kmrlTurquoise, roughness: 0.45 }),
+  boatGlass: new THREE.MeshStandardMaterial({
+    color: '#35505E',
+    roughness: 0.15,
+    metalness: 0.4,
+    emissive: '#F5E9B8',
+    emissiveIntensity: 0,
+  }),
+  boatRoof: new THREE.MeshStandardMaterial({ color: '#E8ECEC', roughness: 0.6 }),
+  wake: new THREE.MeshBasicMaterial({
+    color: '#EAF6F4',
+    transparent: true,
+    opacity: 0.35,
+    depthWrite: false,
+  }),
+  pontoon: new THREE.MeshStandardMaterial({ color: '#DDE2E2', roughness: 0.85 }),
+  gangway: new THREE.MeshStandardMaterial({ color: '#9AA4A6', roughness: 0.9 }),
 }

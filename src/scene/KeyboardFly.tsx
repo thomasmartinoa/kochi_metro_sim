@@ -66,7 +66,7 @@ export function KeyboardFly() {
     const keys = pressed.current
     if (keys.size === 0 || !controls) return
     const state = useSimStore.getState()
-    if (state.appMode === 'drive') return
+    if (state.appMode === 'drive' || state.experience === 'landing') return
 
     // moving under keyboard control releases a follow/selection lock
     if (state.selection?.kind === 'train') state.select(null)

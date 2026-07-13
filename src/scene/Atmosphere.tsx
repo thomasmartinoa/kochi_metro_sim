@@ -115,6 +115,7 @@ export function Atmosphere() {
     const night = THREE.MathUtils.clamp((0.55 - sunI) / 0.55, 0, 1)
     mat.trainGlass.emissive.set('#F5E9B8')
     mat.trainGlass.emissiveIntensity = night * 0.85
+    mat.boatGlass.emissiveIntensity = night * 0.9
     mat.platformLight.emissiveIntensity = 0.25 + night * 2.2
     mat.led.emissiveIntensity = 1.4 + night * 2.4
     // real-city facade windows (OSM GLB) light up after dark

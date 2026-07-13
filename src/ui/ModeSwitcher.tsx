@@ -11,9 +11,11 @@ const MODES: { id: AppMode; label: string; ready: boolean }[] = [
 export function ModeSwitcher() {
   const appMode = useSimStore((s) => s.appMode)
   const setAppMode = useSimStore((s) => s.setAppMode)
+  const experience = useSimStore((s) => s.experience)
+  const modes = experience === 'water' ? MODES.filter((m) => m.id !== 'drive') : MODES
   return (
     <div className="hud-panel pointer-events-auto flex items-center gap-1 px-1.5 py-1.5">
-      {MODES.map((m) =>
+      {modes.map((m) =>
         m.ready ? (
           <button
             key={m.id}

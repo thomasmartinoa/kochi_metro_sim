@@ -2,9 +2,9 @@
  * The clock deck: LIVE badge, scrubber across the service day, speed presets.
  */
 import { useEffect, useState } from 'react'
-import { fmtClock, istDayTime } from '../sim/clock'
+import { fmtClock, fmtTime, istDayTime } from '../sim/clock'
 import { serviceStatusAt } from '../sim/engine'
-import { fmtTime } from '../sim/clock'
+import { waterServiceStatusAt } from '../sim/waterEngine'
 import { useSimStore } from '../state/useSimStore'
 
 const SPEEDS: { n: number; hideMobile?: boolean }[] = [
@@ -22,17 +22,30 @@ export function TimeControls() {
   const setSpeed = useSimStore((s) => s.setSpeed)
   const scrubToDaySec = useSimStore((s) => s.scrubToDaySec)
 
+  const water = useSimStore((s) => s.experience) === 'water'
+
   const [daySec, setDaySec] = useState(() => istDayTime(useSimStore.getState().epochMs).daySec)
-  const [status, setStatus] = useState(() => serviceStatusAt(useSimStore.getState().epochMs))
+  const [status, setStatus] = useState<{ open: boolean; activeCount: number; nextSec?: number }>({
+    open: false,
+    activeCount: 0,
+  })
 
   useEffect(() => {
-    const id = setInterval(() => {
+    const poll = () => {
       const epoch = useSimStore.getState().epochMs
       setDaySec(istDayTime(epoch).daySec)
-      setStatus(serviceStatusAt(epoch))
-    }, 250)
+      if (water) {
+        const s = waterServiceStatusAt(epoch)
+        setStatus({ open: s.open, activeCount: s.activeCount, nextSec: s.nextSailSec })
+      } else {
+        const s = serviceStatusAt(epoch)
+        setStatus({ open: s.open, activeCount: s.activeCount, nextSec: s.nextTrainSec })
+      }
+    }
+    poll()
+    const id = setInterval(poll, 250)
     return () => clearInterval(id)
-  }, [])
+  }, [water])
 
   return (
     <div className="hud-panel pointer-events-auto flex flex-col gap-2 px-4 py-3">
@@ -84,12 +97,16 @@ export function TimeControls() {
       />
       <div className="flex items-center justify-between font-mono text-[11px] text-paper-dim">
         <span>00:00</span>
-        {!status.open && status.nextTrainSec != null && (
+        {!status.open && status.nextSec != null && (
           <span className="text-lemon">
-            Service closed — next train {fmtTime(status.nextTrainSec)}
+            Service closed — next {water ? 'sailing' : 'train'} {fmtTime(status.nextSec)}
           </span>
         )}
-        {status.open && <span className="text-kmrl">{status.activeCount} trains in service</span>}
+        {status.open && (
+          <span className="text-kmrl">
+            {status.activeCount} {water ? 'boats sailing' : 'trains in service'}
+          </span>
+        )}
         <span>24:00</span>
       </div>
     </div>

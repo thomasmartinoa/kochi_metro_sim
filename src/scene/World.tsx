@@ -10,6 +10,7 @@ import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { mat } from './materials'
 import { Atmosphere } from './Atmosphere'
+import { Boats } from './Boats'
 import { CameraRig } from './CameraRig'
 import { City, Palms } from './City'
 import { CityGLB } from './CityGLB'
@@ -19,6 +20,8 @@ import { Line3D } from './Line3D'
 import { PinkLine } from './PinkLine'
 import { SatGround } from './SatGround'
 import { Trains } from './Trains'
+import { WaterRouteLanes } from './WaterRouteLanes'
+import { WaterTerminals } from './WaterTerminals'
 
 /** Real-OSM city with the procedural city as loading fallback / error safety net. */
 class CityBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -101,6 +104,9 @@ export function World() {
       <Line3D />
       <PinkLine />
       <Trains />
+      <Boats />
+      <WaterTerminals />
+      <WaterRouteLanes />
       <DriveTrain />
       <ClockTick />
       <CameraRig />
