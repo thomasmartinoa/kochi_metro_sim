@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { World } from './scene/World'
 import { HUD } from './ui/HUD'
 import { Landing } from './ui/Landing'
+import { Loader } from './ui/Loader'
 import { useSimStore, type Experience } from './state/useSimStore'
 
 const HASH_TO_EXP: Record<string, Experience> = {
@@ -44,6 +45,7 @@ export default function App() {
     <div className="relative h-full w-full">
       <World />
       {experience === 'landing' ? <Landing /> : <HUD />}
+      <Loader />
     </div>
   )
 }

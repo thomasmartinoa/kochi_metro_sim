@@ -54,8 +54,60 @@ body,
   }
 }
 
+/* loading screen: train slides, track streams, boat bobs over rolling waves */
+.loader-slide {
+  animation: loader-slide 2.6s ease-in-out infinite alternate;
+}
+@keyframes loader-slide {
+  from {
+    transform: translateX(-26px);
+  }
+  to {
+    transform: translateX(26px);
+  }
+}
+.loader-track {
+  animation: loader-track 0.7s linear infinite;
+}
+@keyframes loader-track {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+.loader-bob {
+  transform-origin: 180px 55px;
+  animation: loader-bob 2.4s ease-in-out infinite;
+}
+@keyframes loader-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1.3deg);
+  }
+  50% {
+    transform: translateY(5px) rotate(1.3deg);
+  }
+}
+.loader-wave {
+  stroke-dasharray: 30 18;
+  animation: loader-wave 1.6s linear infinite;
+}
+.loader-wave-slow {
+  stroke-dasharray: 26 20;
+  animation: loader-wave 2.6s linear infinite;
+}
+@keyframes loader-wave {
+  to {
+    stroke-dashoffset: -48;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .live-dot {
+  .live-dot,
+  .loader-slide,
+  .loader-track,
+  .loader-bob,
+  .loader-wave,
+  .loader-wave-slow {
     animation: none;
   }
 }

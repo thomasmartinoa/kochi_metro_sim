@@ -1,0 +1,112 @@
+/**
+ * Branded loading overlay while the city (GLB + satellite) streams in.
+ * Metro gets a sliding Metropolis trainset, Water Metro a catamaran bobbing
+ * over waves — both pure SVG/CSS, driven by drei's global load progress.
+ */
+import { useProgress } from '@react-three/drei'
+import { useEffect, useState } from 'react'
+import { useSimStore } from '../state/useSimStore'
+
+function TrainLoader() {
+  return (
+    <svg viewBox="0 0 360 90" className="w-72" aria-hidden>
+      {/* trainset */}
+      <g className="loader-slide">
+        {[0, 1, 2].map((c) => (
+          <g key={c} transform={`translate(${c * 104}, 18)`}>
+            <rect x="4" y="0" width="96" height="34" rx="7" fill="#F2F4F5" />
+            <rect x="4" y="24" width="96" height="6" rx="3" fill="#12B3A6" />
+            <rect x="12" y="8" width="80" height="10" rx="2" fill="#1E2A30" />
+            {c === 0 && <path d="M4 0 q-10 17 0 34 z" fill="#12B3A6" />}
+            {c === 2 && <path d="M100 0 q10 17 0 34 z" fill="#12B3A6" />}
+          </g>
+        ))}
+      </g>
+      {/* track */}
+      <line x1="0" y1="62" x2="360" y2="62" stroke="#2A4750" strokeWidth="3" strokeDasharray="14 10" className="loader-track" />
+    </svg>
+  )
+}
+
+function BoatLoader() {
+  return (
+    <svg viewBox="0 0 360 110" className="w-72" aria-hidden>
+      <g className="loader-bob">
+        {/* twin hulls */}
+        <rect x="120" y="52" width="120" height="10" rx="5" fill="#F2F4F5" />
+        <rect x="126" y="60" width="26" height="8" rx="4" fill="#F2F4F5" />
+        <rect x="208" y="60" width="26" height="8" rx="4" fill="#F2F4F5" />
+        {/* cabin */}
+        <rect x="132" y="30" width="96" height="24" rx="6" fill="#F2F4F5" />
+        <rect x="138" y="36" width="84" height="9" rx="2" fill="#1E2A30" />
+        <rect x="132" y="50" width="96" height="5" rx="2.5" fill="#12B3A6" />
+        {/* mast light */}
+        <circle cx="180" cy="24" r="3" fill="#D6E64B" />
+        <line x1="180" y1="27" x2="180" y2="30" stroke="#9AA4A6" strokeWidth="2" />
+      </g>
+      {/* waves */}
+      <path
+        d="M0 78 q15 -8 30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0"
+        fill="none"
+        stroke="#22D3EE"
+        strokeWidth="3"
+        className="loader-wave"
+      />
+      <path
+        d="M-15 90 q15 -7 30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0"
+        fill="none"
+        stroke="#12B3A6"
+        strokeWidth="2.5"
+        opacity="0.6"
+        className="loader-wave-slow"
+      />
+    </svg>
+  )
+}
+
+export function Loader() {
+  const { active, progress } = useProgress()
+  const experience = useSimStore((s) => s.experience)
+  const [done, setDone] = useState(false)
+  const [gone, setGone] = useState(false)
+
+  useEffect(() => {
+    if (!active && progress >= 100 && !done) {
+      setDone(true)
+      const t = setTimeout(() => setGone(true), 700)
+      return () => clearTimeout(t)
+    }
+  }, [active, progress, done])
+
+  const pinned = import.meta.env.DEV && window.location.search.includes('loader')
+  if (gone && !pinned) return null
+  const water = pinned
+    ? window.location.search.includes('loader=water')
+    : experience === 'water'
+  return (
+    <div
+      className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-ink transition-opacity duration-700 ${
+        done && !pinned ? 'pointer-events-none opacity-0' : 'opacity-100'
+      }`}
+    >
+      {water ? <BoatLoader /> : <TrainLoader />}
+      <div className="flex flex-col items-center gap-1.5">
+        <div className="font-display text-sm font-semibold tracking-wide text-paper">
+          {water ? 'Kochi Water Metro' : 'Kochi Metro'}
+        </div>
+        <div className="font-ml text-xs text-paper-dim">
+          {water ? 'ജല മെട്രോ' : 'കൊച്ചി മെട്രോ'}
+        </div>
+      </div>
+      <div className="h-1 w-56 overflow-hidden rounded-full bg-panel">
+        <div
+          className="h-full rounded-full bg-kmrl transition-[width] duration-300"
+          style={{ width: `${Math.round(progress)}%` }}
+        />
+      </div>
+      <div className="font-mono text-[11px] tabular-nums text-paper-dim">
+        {Math.round(progress)}% · loading the city
+      </div>
+    </div>
+  )
+}
