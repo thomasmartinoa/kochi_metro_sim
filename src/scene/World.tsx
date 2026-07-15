@@ -18,6 +18,7 @@ import { DriveTrain } from './DriveTrain'
 import { KeyboardFly } from './KeyboardFly'
 import { Line3D } from './Line3D'
 import { PinkLine } from './PinkLine'
+import { PostFX } from './PostFX'
 import { SatGround } from './SatGround'
 import { Trains } from './Trains'
 import { WaterRouteLanes } from './WaterRouteLanes'
@@ -42,13 +43,46 @@ function ClockTick() {
   return null
 }
 
+/**
+ * Keeps the camera out of the ground. OrbitControls' polar limit stops you
+ * *tilting* under the city, but dollying/panning can still push the eye below
+ * it — from underneath you see the map's backside and the sky through it.
+ * Drive mode owns its own camera (cab view sits low on purpose).
+ */
+function GroundClamp() {
+  const camera = useThree((s) => s.camera)
+  const controls = useThree((s) => s.controls) as {
+    target?: THREE.Vector3
+    update?: () => void
+  } | null
+  useFrame(() => {
+    if (useSimStore.getState().appMode === 'drive') return
+    const MIN_Y = 8
+    if (camera.position.y >= MIN_Y) return
+    const lift = MIN_Y - camera.position.y
+    camera.position.y = MIN_Y
+    // lift the orbit target with the eye so the view direction doesn't snap
+    if (controls?.target && controls.update) {
+      controls.target.y += lift
+      controls.update()
+    }
+  })
+  return null
+}
+
 /** Dev-only helper: window.__cam(px,py,pz, tx,ty,tz) frames the view; __sAt(sKm) returns line coords. */
 function DevCam() {
   const camera = useThree((s) => s.camera)
+  const gl = useThree((s) => s.gl)
+  const scene = useThree((s) => s.scene)
   const controls = useThree((s) => s.controls) as { target?: THREE.Vector3; update?: () => void } | null
   useEffect(() => {
     if (!import.meta.env.DEV) return
     const w = window as unknown as Record<string, unknown>
+    // renderer/scene/camera handles for perf profiling from the console
+    w.__gl = gl
+    w.__scene = scene
+    w.__camObj = camera
     w.__cam = (px: number, py: number, pz: number, tx: number, ty: number, tz: number) => {
       camera.position.set(px, py, pz)
       if (controls?.target && controls.update) {
@@ -68,7 +102,7 @@ function DevCam() {
       const d = useDriveStore.getState().drive
       if (d) useDriveStore.getState().nudgeNotch(n - d.notch)
     }
-  }, [camera, controls])
+  }, [camera, controls, gl, scene])
   return null
 }
 
@@ -89,7 +123,11 @@ export function World() {
       onPointerMissed={() => select(null)}
     >
       <color attach="background" args={['#BFDDE2']} />
-      <fog attach="fog" args={['#BFDDE2', 4500, 19000]} />
+      {/* Haze thick enough that the aerial sheet dissolves into the sky well
+          before its edge (~12 km+ out) can be seen. Paired with the zoom-out
+          limit below, the map never shows a border. Colour is driven per
+          time-of-day by Atmosphere. */}
+      <fog attach="fog" args={['#BFDDE2', 1200, 11000]} />
       <Atmosphere />
 
       {/* Fills the horizon beyond the aerial sheet's ~31 km extent. Kept far
@@ -117,14 +155,18 @@ export function World() {
       <ClockTick />
       <CameraRig />
       <KeyboardFly />
+      <GroundClamp />
       <DevCam />
+      <PostFX />
 
       <OrbitControls
         makeDefault
         target={[mid.pos.x, 30, mid.pos.z]}
         maxPolarAngle={Math.PI * 0.49}
         minDistance={60}
-        maxDistance={22000}
+        // Pulled in from 22 km: beyond this the aerial sheet's edge comes into
+        // frame. At 7 km the fog above has already faded the horizon to sky.
+        maxDistance={7000}
         enableDamping
       />
     </Canvas>

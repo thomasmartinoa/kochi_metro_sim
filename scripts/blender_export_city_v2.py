@@ -78,11 +78,14 @@ def pbr_mat(name, base, nrm=None, emis=None, rough=0.85, metal=0.0):
 # use the pre-baked opaque composites from the scratchpad.
 RES = f'{ASSETS}/Residential house facade with windowsdoors'
 BUILDING_MATS = {
+    # the stock brick emissive is ~white with the window mask in its ALPHA,
+    # which glTF emissive ignores -> whole walls would glow. Pre-composited
+    # over black in the scratchpad so only the windows light up.
     'brick.1': dict(
         name='KochiBrick', tile=6.0, rough=0.9,
         base=f'{RES}/Residential house facade with windows.png',
         nrm=f'{RES}/Residential house facade with windows_nrm.png',
-        emis=f'{RES}/Residential house facade with windows emmision.png',
+        emis=f'{SCRATCH}/brick_emissive.png',
     ),
     'appartments.1': dict(
         name='KochiApartments', tile=15.0, rough=0.85,
@@ -100,7 +103,7 @@ BUILDING_MATS = {
         name='KochiGlass', tile=10.0, rough=0.25, metal=0.3,
         base=f'{ASSETS}/facades/glass/pro_6841.jpg',
         nrm=None,
-        emis=f'{ASSETS}/facades/glass/pro_6841_emission.png',
+        emis=f'{SCRATCH}/glass_emissive.png',
     ),
     'roof_tiles.1': dict(
         name='KochiRoofTiles', tile=3.0, rough=0.9,
@@ -171,12 +174,43 @@ for lay in list(bm.loops.layers.uv):
     bm.loops.layers.uv.remove(lay)
 uvl = bm.loops.layers.uv.new('UVMap')
 
+# Per-building max height, to pick a sensible roof covering.
+island_id = [-1] * len(bm.faces)
+island_maxz = []
+for f in bm.faces:
+    if island_id[f.index] != -1:
+        continue
+    iid = len(island_maxz)
+    stack = [f]
+    island_id[f.index] = iid
+    mz = 0.0
+    while stack:
+        cur = stack.pop()
+        for v in cur.verts:
+            if v.co.z > mz:
+                mz = v.co.z
+            for lf in v.link_faces:
+                if island_id[lf.index] == -1:
+                    island_id[lf.index] = iid
+                    stack.append(lf)
+    island_maxz.append(mz)
+
+# The author's facade materials get applied to roof faces too (their Object-space
+# projection made that invisible-ish). Projected properly they'd paint *windows*
+# on rooftops — and those maps are emissive, so roofs would glow at night. Roofs
+# always get a real covering instead: tiles on houses, concrete on taller blocks.
+EMISSIVE_FACADES = {name_to_new[k] for k in ('brick.1', 'appartments.1', 'office.1', 'glass.1')}
+TILES = name_to_new['roof_tiles.1']
+CONCRETE = name_to_new['concrete.1']
+
 for f in bm.faces:
     o = orig_idx[f.index] if f.index < len(orig_idx) else 0
     idx = remap[o] if o < len(remap) else FALLBACK
+    n = f.normal
+    if abs(n.z) > 0.6 and idx in EMISSIVE_FACADES:
+        idx = TILES if island_maxz[island_id[f.index]] < 12.0 else CONCRETE
     f.material_index = idx
     tile = tiles[idx]
-    n = f.normal
     if abs(n.z) > 0.6:  # roof / floor -> planar XY
         for lo in f.loops:
             co = lo.vert.co

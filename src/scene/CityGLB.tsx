@@ -14,7 +14,7 @@ import { useEffect } from 'react'
 import * as THREE from 'three'
 import { project } from '../sim/projection'
 
-const CITY_URL = '/models/kochi-city-v2.glb?v=2'
+const CITY_URL = '/models/kochi-city-v2.glb?v=4'
 /** Blosm geo origin of the map_7 scene this GLB was exported from. */
 const ORIGIN = { lat: 10.040735244750977, lon: 76.28477096557617 }
 const LAT_STRETCH = 111320 / 110574
