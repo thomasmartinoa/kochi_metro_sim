@@ -1,17 +1,22 @@
 /**
- * Satellite-imagery ground plane (Esri World Imagery, stitched by
- * scripts/fetch-satellite.mjs). Sits just above the plain ground colour and
- * below every vector layer, so buildings/roads/water render on top of the
- * real photograph. Bounds come from the stitched tile grid.
+ * Aerial-imagery ground plane. The image is the Blosm aerial overlay lifted
+ * off the (flat, zero-elevation) terrain of the authored Blender scene and
+ * re-exported for web by scripts/blender_export_city_v2.py's prep step; its
+ * bounds come from that terrain's UV->world fit (src/data/kochi-overlay-meta).
+ *
+ * Sits just above the plain ground colour and below every vector layer, so
+ * buildings/roads render on top of the real photograph.
  */
 import { useTexture } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import meta from '../data/kochi-sat-meta.json'
+import meta from '../data/kochi-overlay-meta.json'
 import { project } from '../sim/projection'
 
+const OVERLAY_URL = '/textures/kochi-overlay.webp'
+
 export function SatGround() {
-  const tex = useTexture('/textures/kochi-sat.jpg')
+  const tex = useTexture(OVERLAY_URL)
   const gl = useThree((s) => s.gl)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.anisotropy = Math.min(8, gl.capabilities.getMaxAnisotropy())
@@ -29,4 +34,4 @@ export function SatGround() {
   )
 }
 
-useTexture.preload('/textures/kochi-sat.jpg')
+useTexture.preload(OVERLAY_URL)

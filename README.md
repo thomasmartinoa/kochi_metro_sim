@@ -1,13 +1,14 @@
 # Kochi in Transit — Metro & Water Metro Simulator
 
 A 3D browser simulation of Kochi's public transit — a live tracker and a game
-in one page, over the real city (OSM buildings + satellite ground). Built with
-React 19, react-three-fiber, zustand and Tailwind 4 on Vite.
+in one page, over the real city (OSM buildings with normal-mapped PBR facades,
+on real aerial imagery). Built with React 19, react-three-fiber, zustand and
+Tailwind 4 on Vite.
 
 > **Contains data provided by Kochi Metro Rail Limited** — the real KMRL GTFS
 > open-data feed (stations, track shape, 450 scheduled trips, fares,
 > Malayalam/Hindi names) drives the metro. Map data © OpenStreetMap
-> contributors · Imagery © Esri, Maxar.
+> contributors · aerial imagery via Blosm.
 
 ## Experiences
 
@@ -42,8 +43,10 @@ routed). Fully client-side — static hosting, no backend.
   fares ₹10–₹60 from the 25×25 matrix
 - Water Metro: High Court ⇄ Vypin, Vyttila ⇄ Kakkanad (along the Kadambrayar
   canal), High Court ⇄ Eloor, Fort Kochi ⇄ High Court; fares ₹20/₹30/₹40
-- Real Kochi: OSM building footprints with baked facades, roads, satellite
-  ground; Pink Line (Phase 2 to Infopark) as a dashed "opening 2027" ghost
+- Real Kochi: OSM building footprints with normal-mapped PBR facades (brick /
+  apartments / office / glass / terracotta tiles / concrete), textured road and
+  railway ribbons, real aerial ground; Pink Line (Phase 2 to Infopark) as a
+  dashed "opening 2027" ghost
 
 ## Develop
 
@@ -54,11 +57,30 @@ npm test         # 32 vitest unit tests (metro engine, water engine, drive)
 npm run build    # production bundle
 npm run gtfs     # re-parse data/gtfs/*.txt -> src/data/gtfs.json
 node scripts/gen-water-schedule.mjs   # regenerate water routes/timetable
-node scripts/fetch-satellite.mjs      # re-stitch the satellite ground
 ```
 
-The Blender city pipeline (OSM via Blosm → textured GLB) is documented in
-`docs/ART-GUIDE.md`; regenerate with `scripts/blender_export_city.py`.
+### Rebuilding the 3D city
+
+The city is authored in Blender (Blosm OSM import), then trimmed to a ~1.5 km
+corridor around the metro + water network, re-UV'd and exported for web:
+
+```bash
+# 1. in the authored .blend: trim to corridor + carve viaduct/station clearance,
+#    then write the library + road centerlines (see docs/ART-GUIDE.md)
+# 2. aerial ground
+blender -b <scene.blend> --factory-startup -P scripts/blender_export_overlay.py -- \
+  <scratch>/kochi-overlay.png <lat0> <lon0>
+node scripts/export-overlay.mjs <scratch>/kochi-overlay.png
+# 3. city geometry + PBR facades
+blender -b --factory-startup -P scripts/blender_export_city_v2.py -- \
+  <scratch>/kochi_city_v2.blend <scratch> <blosm_textures_dir> \
+  public/models/kochi-city-v2.glb
+npx @gltf-transform/cli optimize public/models/kochi-city-v2.glb \
+  public/models/kochi-city-v2.glb --compress draco --texture-compress webp \
+  --texture-size 2048
+```
+
+After re-exporting, bump the `?v=` cache-buster in `src/scene/CityGLB.tsx`.
 
 ### Controls
 
@@ -68,7 +90,7 @@ Drive: `W`/`↑` power · `S`/`↓` brake · `Space` emergency · `C` cab/chase 
 ## Architecture
 
 ```
-scripts/                 data pipelines (GTFS, water schedule, satellite, city GLB)
+scripts/                 data pipelines (GTFS, water schedule, aerial ground, city GLB)
 src/sim/                 pure, tested core (no react imports)
   engine.ts              metro timetable -> train states at any instant
   waterEngine.ts         water metro timetable -> boat states
@@ -82,5 +104,6 @@ src/ui/                  HUD panels + Landing + loaders (Tailwind 4)
 
 Data attribution: Kochi Metro Rail Limited open data
 (<https://kochimetro.org/open-data/>), used under its attribution licence;
-map data © OpenStreetMap contributors (ODbL); imagery © Esri, Maxar,
-Earthstar Geographics. Unofficial fan project, not affiliated with KMRL.
+map data © OpenStreetMap contributors (ODbL); aerial imagery and facade
+textures via the Blosm asset pack. Unofficial fan project, not affiliated
+with KMRL.

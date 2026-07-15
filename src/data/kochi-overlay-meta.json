@@ -1,0 +1,11 @@
+{
+ "west": 76.14624099480241,
+ "east": 76.4318840465615,
+ "south": 9.870350299165287,
+ "north": 10.20797137329961,
+ "px": [
+  4096,
+  4884
+ ],
+ "source": "Blosm aerial overlay (authored Blender scene), bounds from Terrain UV fit"
+}
