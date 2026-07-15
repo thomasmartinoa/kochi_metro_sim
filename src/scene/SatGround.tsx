@@ -4,11 +4,9 @@
  * re-exported for web by scripts/blender_export_city_v2.py's prep step; its
  * bounds come from that terrain's UV->world fit (src/data/kochi-overlay-meta).
  *
- * Sits below every vector layer so buildings/roads render on top of the real
- * photograph. The camera spans 1 m..60 km, so depth precision out at a few km
- * is coarser than a naive road/ground gap: the plane is dropped below the
- * building base AND depth-offset backwards, otherwise roads z-fight (flicker)
- * against the imagery when viewed from altitude.
+ * Sits just below the building base so buildings/roads render on top of the
+ * real photograph. Depth precision across the 1 m..60 km view range is handled
+ * globally by the canvas's logarithmic depth buffer (see World.tsx).
  */
 import { useTexture } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
@@ -35,15 +33,7 @@ export function SatGround() {
       position={[(nw.x + se.x) / 2, GROUND_Y, (nw.z + se.z) / 2]}
     >
       <planeGeometry args={[se.x - nw.x, se.z - nw.z]} />
-      <meshStandardMaterial
-        map={tex}
-        roughness={1}
-        metalness={0}
-        // hold the imagery behind everything drawn on it, whatever the distance
-        polygonOffset
-        polygonOffsetFactor={4}
-        polygonOffsetUnits={8}
-      />
+      <meshStandardMaterial map={tex} roughness={1} metalness={0} />
     </mesh>
   )
 }

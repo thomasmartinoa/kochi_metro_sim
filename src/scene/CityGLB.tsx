@@ -32,11 +32,9 @@ export function CityGLB() {
     const maxAniso = gl.capabilities.getMaxAnisotropy()
     scene.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return
-      const isRoad = o.name === 'Roads'
-      // Ride clear of the aerial ground (which sits at -0.35 and is depth-offset
-      // back): far enough that the road surface stays solid at altitude, low
-      // enough to still read as painted on the city from street level.
-      if (isRoad) o.position.y = 0.35
+      // sit just clear of the aerial ground (y=-0.35) so the ribbons read as
+      // painted on the city; the log depth buffer keeps them solid at range
+      if (o.name === 'Roads') o.position.y = 0.35
       o.updateMatrix()
       o.matrixAutoUpdate = false
       const mats = Array.isArray(o.material) ? o.material : [o.material]
@@ -47,13 +45,6 @@ export function CityGLB() {
           if (tex) tex.anisotropy = Math.min(8, maxAniso)
         }
         if (m.map) m.map.needsUpdate = true
-        if (isRoad) {
-          // pull ribbons toward the viewer in depth so they never flicker
-          // through the imagery on distant, shallow-angle views
-          m.polygonOffset = true
-          m.polygonOffsetFactor = -4
-          m.polygonOffsetUnits = -8
-        }
         if (m.emissiveMap) {
           m.emissive.set('#F5E9B8')
           m.emissiveIntensity = 0

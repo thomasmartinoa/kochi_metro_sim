@@ -80,6 +80,11 @@ export function World() {
     <Canvas
       shadows={false}
       dpr={[1, 1.75]}
+      // The world spans 1 m (cab view) to 60 km (whole-region view). A normal
+      // depth buffer spends nearly all its precision near the camera, so at a
+      // few km the ground/roads/backdrop are indistinguishable and flicker.
+      // A logarithmic buffer keeps precision usable across the whole range.
+      gl={{ logarithmicDepthBuffer: true }}
       camera={{ position: [mid.pos.x + 210, 130, mid.pos.z + 310], far: 60000, near: 1 }}
       onPointerMissed={() => select(null)}
     >
@@ -87,8 +92,9 @@ export function World() {
       <fog attach="fog" args={['#BFDDE2', 4500, 19000]} />
       <Atmosphere />
 
-      {/* backdrop ground far below the satellite imagery (avoids z-fighting at range) */}
-      <mesh material={mat.ground} rotation={[-Math.PI / 2, 0, 0]} position={[0, -30, 0]}>
+      {/* Fills the horizon beyond the aerial sheet's ~31 km extent. Kept far
+          below it so it can never win the depth test and sheet over the city. */}
+      <mesh material={mat.ground} rotation={[-Math.PI / 2, 0, 0]} position={[0, -120, 0]}>
         <planeGeometry args={[60000, 60000]} />
       </mesh>
 
