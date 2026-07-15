@@ -118,9 +118,9 @@ BUILDING_MATS = {
     ),
 }
 
-# ------------------------------------------------------- append buildings
+# ------------------------------------------------ append buildings + water
 with bpy.data.libraries.load(LIB, link=False) as (src, dst):
-    dst.objects = [n for n in src.objects if 'buildings' in n]
+    dst.objects = [n for n in src.objects if 'buildings' in n or 'water' in n]
 for ob in dst.objects:
     if ob is not None:
         bpy.context.scene.collection.objects.link(ob)
@@ -278,6 +278,54 @@ for k in mat_order:
 r_obj = bpy.data.objects.new('Roads', rme)
 bpy.context.scene.collection.objects.link(r_obj)
 print('roads built:', built, 'quads from', len(roads), 'polylines')
+
+# ------------------------------------------------------------------- water
+# The author's kochi_water is a normal-mapped glossy surface (dark teal base,
+# roughness 0.06, ripple normal tiled at 30 m) but drives the normal through
+# TEX_COORD:Object and the mesh carries no UVs at all -> generate planar UVs.
+w_obj = next((o for o in bpy.context.scene.objects if 'water' in o.name), None)
+if w_obj:
+    WATER_TILE = 30.0
+    wmat = bpy.data.materials.new('KochiWater')
+    wmat.use_nodes = True
+    wnt = wmat.node_tree
+    wb = wnt.nodes['Principled BSDF']
+    wb.inputs['Base Color'].default_value = (0.015, 0.07, 0.1, 1.0)
+    # author's 0.06 is a mirror: nudged up so the sun is a broken glare on the
+    # ripples rather than one blown-out hotspot in a real-time renderer
+    wb.inputs['Roughness'].default_value = 0.12
+    wb.inputs['Metallic'].default_value = 0.0
+    wuvn = wnt.nodes.new('ShaderNodeUVMap')
+    wuvn.uv_map = 'UVMap'
+    wtn = wnt.nodes.new('ShaderNodeTexImage')
+    wtn.image = img(f'{ASSETS}/water 0342normal.jpg')
+    wtn.image.colorspace_settings.name = 'Non-Color'
+    wnt.links.new(wuvn.outputs['UV'], wtn.inputs['Vector'])
+    wnmap = wnt.nodes.new('ShaderNodeNormalMap')
+    wnmap.inputs['Strength'].default_value = 0.6
+    wnt.links.new(wtn.outputs['Color'], wnmap.inputs['Color'])
+    wnt.links.new(wnmap.outputs['Normal'], wb.inputs['Normal'])
+
+    wme = w_obj.data
+    wme.materials.clear()
+    wme.materials.append(wmat)
+    wbm = bmesh.new()
+    wbm.from_mesh(wme)
+    for lay in list(wbm.loops.layers.uv):
+        wbm.loops.layers.uv.remove(lay)
+    wuv = wbm.loops.layers.uv.new('UVMap')
+    for f in wbm.faces:
+        f.material_index = 0
+        for lo in f.loops:
+            co = lo.vert.co
+            lo[wuv].uv = (co.x / WATER_TILE, co.y / WATER_TILE)
+    bmesh.ops.triangulate(wbm, faces=wbm.faces)
+    wbm.to_mesh(wme)
+    wme.update()
+    wbm.free()
+    w_obj.name = 'Water'
+    wme.name = 'Water'
+    print('water:', len(wme.polygons), 'tris, planar UVs @', WATER_TILE, 'm')
 
 for ob in bpy.context.scene.objects:
     if ob.type == 'MESH':
