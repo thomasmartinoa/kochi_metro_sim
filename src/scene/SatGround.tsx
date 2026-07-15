@@ -4,8 +4,11 @@
  * re-exported for web by scripts/blender_export_city_v2.py's prep step; its
  * bounds come from that terrain's UV->world fit (src/data/kochi-overlay-meta).
  *
- * Sits just above the plain ground colour and below every vector layer, so
- * buildings/roads render on top of the real photograph.
+ * Sits below every vector layer so buildings/roads render on top of the real
+ * photograph. The camera spans 1 m..60 km, so depth precision out at a few km
+ * is coarser than a naive road/ground gap: the plane is dropped below the
+ * building base AND depth-offset backwards, otherwise roads z-fight (flicker)
+ * against the imagery when viewed from altitude.
  */
 import { useTexture } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
@@ -14,6 +17,9 @@ import meta from '../data/kochi-overlay-meta.json'
 import { project } from '../sim/projection'
 
 const OVERLAY_URL = '/textures/kochi-overlay.webp'
+/** Just under the building base (y=0): clear of it, but not so low the
+ *  buildings read as floating at street level. */
+const GROUND_Y = -0.35
 
 export function SatGround() {
   const tex = useTexture(OVERLAY_URL)
@@ -26,10 +32,18 @@ export function SatGround() {
   return (
     <mesh
       rotation={[-Math.PI / 2, 0, 0]}
-      position={[(nw.x + se.x) / 2, 0.05, (nw.z + se.z) / 2]}
+      position={[(nw.x + se.x) / 2, GROUND_Y, (nw.z + se.z) / 2]}
     >
       <planeGeometry args={[se.x - nw.x, se.z - nw.z]} />
-      <meshStandardMaterial map={tex} roughness={1} metalness={0} />
+      <meshStandardMaterial
+        map={tex}
+        roughness={1}
+        metalness={0}
+        // hold the imagery behind everything drawn on it, whatever the distance
+        polygonOffset
+        polygonOffsetFactor={4}
+        polygonOffsetUnits={8}
+      />
     </mesh>
   )
 }
