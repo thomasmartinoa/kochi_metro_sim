@@ -164,9 +164,10 @@ export function World() {
         target={[mid.pos.x, 30, mid.pos.z]}
         maxPolarAngle={Math.PI * 0.49}
         minDistance={60}
-        // Pulled in from 22 km: beyond this the aerial sheet's edge comes into
-        // frame. At 7 km the fog above has already faded the horizon to sky.
-        maxDistance={7000}
+        // Pulled in to 3.6 km: beyond this the aerial sheet's edge creeps into
+        // frame at the top. At this distance the corridor city fills the view
+        // and the horizon is already faded to haze/sky.
+        maxDistance={3600}
         enableDamping
       />
     </Canvas>
