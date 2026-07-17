@@ -57,7 +57,7 @@ function ClockTick() {
  * ==========================================================================*/
 const MIN_CAM_Y = 8
 const MAX_CAM_Y = 2600
-const MAP_INSET_M = 500
+const MAP_INSET_M = 1500
 
 /** Horizontal walls, derived from the real aerial sheet's bounds. */
 const MAP_BOUNDS = (() => {
