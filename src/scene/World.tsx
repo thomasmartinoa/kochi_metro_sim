@@ -5,7 +5,9 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Component, Suspense, useEffect, type ReactNode } from 'react'
 import type * as THREE from 'three'
+import overlayMeta from '../data/kochi-overlay-meta.json'
 import { centerAt } from '../sim/alignment'
+import { project } from '../sim/projection'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { mat } from './materials'
@@ -45,21 +47,38 @@ function ClockTick() {
 
 /* ============================================================================
  * CAMERA LIMITS — adjust these to taste.
- *   MIN_CAM_Y  : lowest the eye may sit (metres). Stops going under the map.
- *   MAX_CAM_Y  : highest the eye may sit (metres). Stops flying too high with
- *                Q/E. Lower it for a tighter ceiling.
- *   MAX_ORBIT_DISTANCE (on <OrbitControls maxDistance=...> below): how far you
- *                can zoom/dolly out. Beyond it the aerial map's edge shows.
- * MAX_CAM_Y and MAX_ORBIT_DISTANCE together cap how far out any view can get.
+ *   MIN_CAM_Y   : lowest the eye may sit (metres). Stops going under the map.
+ *   MAX_CAM_Y   : highest the eye may sit (metres). Stops flying too high with
+ *                 Q/E. Lower it for a tighter ceiling.
+ *   MAP_INSET_M : how far INSIDE the aerial map's edge the camera must stay
+ *                 (metres). Raise it to keep the border further out of frame.
+ *   maxDistance (on <OrbitControls> below): how far you can zoom/dolly out.
+ *                 Beyond it the aerial map's edge shows.
  * ==========================================================================*/
 const MIN_CAM_Y = 8
 const MAX_CAM_Y = 2600
+const MAP_INSET_M = 500
+
+/** Horizontal walls, derived from the real aerial sheet's bounds. */
+const MAP_BOUNDS = (() => {
+  const nw = project(overlayMeta.north, overlayMeta.west)
+  const se = project(overlayMeta.south, overlayMeta.east)
+  return {
+    minX: Math.min(nw.x, se.x) + MAP_INSET_M,
+    maxX: Math.max(nw.x, se.x) - MAP_INSET_M,
+    minZ: Math.min(nw.z, se.z) + MAP_INSET_M,
+    maxZ: Math.max(nw.z, se.z) - MAP_INSET_M,
+  }
+})()
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
 
 /**
- * Keeps the camera inside a sane vertical band. OrbitControls' polar limit and
- * maxDistance only bound orbiting/dollying; WASD+Q/E flight (KeyboardFly) can
- * still push the eye under the map or arbitrarily high, so clamp both ends here
- * every frame. Drive mode owns its own camera (cab view sits low on purpose).
+ * Keeps the camera inside the map. OrbitControls' polar limit and maxDistance
+ * only bound orbiting/dollying; WASD+Q/E flight (KeyboardFly) can still push the
+ * eye under the map, arbitrarily high, or off the sheet entirely — so clamp all
+ * three axes here every frame. The orbit target moves with the eye so the view
+ * direction never snaps. Drive mode owns its own camera (cab sits low on purpose).
  */
 function CameraBounds() {
   const camera = useThree((s) => s.camera)
@@ -69,14 +88,21 @@ function CameraBounds() {
   } | null
   useFrame(() => {
     if (useSimStore.getState().appMode === 'drive') return
-    const y = camera.position.y
-    const clamped = Math.min(Math.max(y, MIN_CAM_Y), MAX_CAM_Y)
-    if (clamped === y) return
-    const shift = clamped - y
-    camera.position.y = clamped
-    // move the orbit target with the eye so the view direction doesn't snap
+    const p = camera.position
+    const nx = clamp(p.x, MAP_BOUNDS.minX, MAP_BOUNDS.maxX)
+    const ny = clamp(p.y, MIN_CAM_Y, MAX_CAM_Y)
+    const nz = clamp(p.z, MAP_BOUNDS.minZ, MAP_BOUNDS.maxZ)
+    if (nx === p.x && ny === p.y && nz === p.z) return
+    const dx = nx - p.x
+    const dy = ny - p.y
+    const dz = nz - p.z
+    p.set(nx, ny, nz)
     if (controls?.target && controls.update) {
-      controls.target.y += shift
+      controls.target.set(
+        controls.target.x + dx,
+        controls.target.y + dy,
+        controls.target.z + dz,
+      )
       controls.update()
     }
   })
