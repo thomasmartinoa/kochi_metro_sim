@@ -254,10 +254,13 @@ CLASS_VTILE = {'trunk': 9.0, 'primary': 9.0, 'secondary': 8.0, 'tertiary': 7.0, 
 rbm = bmesh.new()
 ruv = rbm.loops.layers.uv.new('UVMap')
 mat_order = ['asphalt', 'rail']
-Z = 0.0
+# Rail sits a touch above asphalt so the two ribbons don't z-fight where a
+# level crossing overlaps a road (they're one mesh, otherwise coplanar).
+CLASS_Z = {'trunk': 0.0, 'primary': 0.0, 'secondary': 0.0, 'tertiary': 0.0, 'rail': 0.5}
 built = 0
 for r in roads:
-    pts = [Vector((p[0], p[1], Z)) for p in r['p']]
+    z = CLASS_Z[r['c']]
+    pts = [Vector((p[0], p[1], z)) for p in r['p']]
     if len(pts) < 2:
         continue
     hw = r['w'] / 2.0

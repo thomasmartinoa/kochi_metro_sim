@@ -43,13 +43,25 @@ function ClockTick() {
   return null
 }
 
+/* ============================================================================
+ * CAMERA LIMITS — adjust these to taste.
+ *   MIN_CAM_Y  : lowest the eye may sit (metres). Stops going under the map.
+ *   MAX_CAM_Y  : highest the eye may sit (metres). Stops flying too high with
+ *                Q/E. Lower it for a tighter ceiling.
+ *   MAX_ORBIT_DISTANCE (on <OrbitControls maxDistance=...> below): how far you
+ *                can zoom/dolly out. Beyond it the aerial map's edge shows.
+ * MAX_CAM_Y and MAX_ORBIT_DISTANCE together cap how far out any view can get.
+ * ==========================================================================*/
+const MIN_CAM_Y = 8
+const MAX_CAM_Y = 2600
+
 /**
- * Keeps the camera out of the ground. OrbitControls' polar limit stops you
- * *tilting* under the city, but dollying/panning can still push the eye below
- * it — from underneath you see the map's backside and the sky through it.
- * Drive mode owns its own camera (cab view sits low on purpose).
+ * Keeps the camera inside a sane vertical band. OrbitControls' polar limit and
+ * maxDistance only bound orbiting/dollying; WASD+Q/E flight (KeyboardFly) can
+ * still push the eye under the map or arbitrarily high, so clamp both ends here
+ * every frame. Drive mode owns its own camera (cab view sits low on purpose).
  */
-function GroundClamp() {
+function CameraBounds() {
   const camera = useThree((s) => s.camera)
   const controls = useThree((s) => s.controls) as {
     target?: THREE.Vector3
@@ -57,13 +69,14 @@ function GroundClamp() {
   } | null
   useFrame(() => {
     if (useSimStore.getState().appMode === 'drive') return
-    const MIN_Y = 8
-    if (camera.position.y >= MIN_Y) return
-    const lift = MIN_Y - camera.position.y
-    camera.position.y = MIN_Y
-    // lift the orbit target with the eye so the view direction doesn't snap
+    const y = camera.position.y
+    const clamped = Math.min(Math.max(y, MIN_CAM_Y), MAX_CAM_Y)
+    if (clamped === y) return
+    const shift = clamped - y
+    camera.position.y = clamped
+    // move the orbit target with the eye so the view direction doesn't snap
     if (controls?.target && controls.update) {
-      controls.target.y += lift
+      controls.target.y += shift
       controls.update()
     }
   })
@@ -155,7 +168,7 @@ export function World() {
       <ClockTick />
       <CameraRig />
       <KeyboardFly />
-      <GroundClamp />
+      <CameraBounds />
       <DevCam />
       <PostFX />
 
