@@ -114,7 +114,9 @@ export function HUD() {
         <div className="ml-auto self-end text-right font-display text-[10px] leading-tight tracking-wide text-paper-dim/70">
           Contains data provided by Kochi Metro Rail Limited
           <br />
-          Map data © OpenStreetMap contributors · aerial imagery via Blosm
+          Map data © OpenStreetMap contributors
+          <br />
+          Imagery: Powered by Esri · Maxar, Earthstar Geographics
         </div>
       </div>
     </div>

@@ -4,9 +4,11 @@
  * re-exported for web by scripts/blender_export_city_v2.py's prep step; its
  * bounds come from that terrain's UV->world fit (src/data/kochi-overlay-meta).
  *
- * Sits just below the building base so buildings/roads render on top of the
- * real photograph. Depth precision across the 1 m..60 km view range is handled
- * globally by the canvas's logarithmic depth buffer (see World.tsx).
+ * Since the streaming tile ground (TileGround) arrived this is the instant-on,
+ * offline FALLBACK layer: it sits ~1 m under the tiles, shows immediately on
+ * load and wherever tiles haven't streamed yet, and the tiles cover it as they
+ * arrive. Depth precision across the 1 m..60 km view range is handled globally
+ * by the canvas's logarithmic depth buffer (see World.tsx).
  */
 import { useTexture } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
@@ -15,9 +17,8 @@ import meta from '../data/kochi-overlay-meta.json'
 import { project } from '../sim/projection'
 
 const OVERLAY_URL = '/textures/kochi-overlay.webp'
-/** Just under the building base (y=0): clear of it, but not so low the
- *  buildings read as floating at street level. */
-const GROUND_Y = -0.35
+/** ~1 m under the streamed tiles (-0.35) so they cleanly cover it. */
+const GROUND_Y = -1.5
 
 export function SatGround() {
   const tex = useTexture(OVERLAY_URL)

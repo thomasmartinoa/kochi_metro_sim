@@ -22,6 +22,7 @@ import { Line3D } from './Line3D'
 import { PinkLine } from './PinkLine'
 import { PostFX } from './PostFX'
 import { SatGround } from './SatGround'
+import { TileGround } from './TileGround'
 import { Trains } from './Trains'
 import { WaterRouteLanes } from './WaterRouteLanes'
 import { WaterTerminals } from './WaterTerminals'
@@ -184,6 +185,7 @@ export function World() {
       <Suspense fallback={null}>
         <SatGround />
       </Suspense>
+      <TileGround />
       <Line3D />
       <PinkLine />
       <Trains />

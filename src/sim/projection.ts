@@ -3,10 +3,10 @@
  * Equirectangular is plenty accurate over a ~30 km extent.
  * World axes: +x = east, +z = south (so the map reads like a north-up map in three.js).
  */
-const ORIGIN_LAT = 10.03 // mid-line
-const ORIGIN_LON = 76.32
-const M_PER_DEG_LAT = 111_320
-const M_PER_DEG_LON = 111_320 * Math.cos((ORIGIN_LAT * Math.PI) / 180)
+export const ORIGIN_LAT = 10.03 // mid-line
+export const ORIGIN_LON = 76.32
+export const M_PER_DEG_LAT = 111_320
+export const M_PER_DEG_LON = 111_320 * Math.cos((ORIGIN_LAT * Math.PI) / 180)
 
 export function project(lat: number, lon: number): { x: number; z: number } {
   return {

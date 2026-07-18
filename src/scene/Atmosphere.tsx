@@ -11,6 +11,7 @@ import * as THREE from 'three'
 import { istDayTime } from '../sim/clock'
 import { useSimStore } from '../state/useSimStore'
 import { cityEmissives } from './CityGLB'
+import { groundDim } from './TileGround'
 import { mat } from './materials'
 
 interface Key {
@@ -110,6 +111,9 @@ export function Atmosphere() {
       sunRef.current.color.copy(cols.sun)
     }
     if (hemiRef.current) hemiRef.current.intensity = hemiI
+
+    // unlit streamed satellite tiles follow the scene's light level
+    groundDim.value = THREE.MathUtils.clamp(0.08 + hemiI * 0.58 + sunI * 0.22, 0.16, 1)
 
     // night glow: train windows + platform light strips + brighter tusk LEDs
     const night = THREE.MathUtils.clamp((0.55 - sunI) / 0.55, 0, 1)

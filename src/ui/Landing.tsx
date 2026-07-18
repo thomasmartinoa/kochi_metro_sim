@@ -182,7 +182,7 @@ export function Landing() {
         )}
         <div className="font-display text-[10px] tracking-wide text-paper-dim/70">
           Contains data provided by Kochi Metro Rail Limited · Map data © OpenStreetMap
-          contributors · aerial imagery via Blosm
+          contributors · Imagery: Powered by Esri · Maxar, Earthstar Geographics
         </div>
       </div>
     </div>
