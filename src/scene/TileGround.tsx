@@ -40,14 +40,24 @@ export function tilesSettled(): boolean {
 const TILE_Y = -0.35
 
 /**
- * OSM→Esri registration offset (app metres, +x east / +z south). The whole
- * city (buildings, roads, water, the road-snapped viaduct) is georeferenced to
- * OSM/Blosm, which sits a fixed ~tens of metres off Esri's true-world imagery.
- * We shift the Esri tiles by this constant so they sit under the OSM city.
- * Measured empirically against the Aluva terminus; see window.__tileShift.
+ * The whole app world (city GLB, roads, water, the road-snapped viaduct,
+ * stations) lives in Blosm's coordinate frame: Blosm projects latitude with a
+ * metre-per-degree that differs from true WGS84, and CityGLB's LAT_STRETCH
+ * bakes that in. The Esri tiles are on TRUE web-mercator, so the two diverge
+ * with a latitude-dependent SCALE (small at the Blosm origin, tens of metres by
+ * Aluva) — not a constant offset. We correct the tiles' north axis by scaling
+ * their Z by TILE_LAT_F about the Blosm-origin latitude line (LAT_PIVOT_Z), so
+ * the imagery lands in the same frame as everything else.
+ *
+ * TILE_LAT_F = (Blosm metres-per-degree-lat) / 110574. Calibrated live with
+ * window.__tileF(f) against the Aluva viaduct/river; 1.0 disables the fix.
+ * A residual constant nudge (window.__tileShift) is available but should be ~0.
  */
+const TILE_LAT_F = 1.006739
 const TILE_DX = 0
 const TILE_DZ = 0
+/** Blosm scene geo-origin (must match CityGLB.ORIGIN); the lat pivot for the scale. */
+const BLOSM_ORIGIN_LAT = 10.040735244750977
 
 class EsriProvider extends MapProvider {
   public name = 'esri-world-imagery'
@@ -123,8 +133,23 @@ export function TileGround() {
 
   if (!built) return null
   const { map, K, anchor } = built
-  // dev calibration: window.__tileShift(dx, dz) nudges tiles live to find TILE_DX/DZ
-  const groupRef = (g: THREE.Group | null) => {
+  // Blosm-origin latitude line in app world z — the pivot the tiles' north axis
+  // is scaled about to match the city's latitude frame.
+  const pivotZ = -(BLOSM_ORIGIN_LAT - ORIGIN_LAT) * M_PER_DEG_LAT
+
+  // dev calibration hooks: __tileF(f) sets the latitude scale, __tileShift(dx,dz)
+  // a residual nudge. Both re-derive the two group transforms live.
+  const outerRef = (g: THREE.Group | null) => {
+    if (g && import.meta.env.DEV) {
+      const w = window as unknown as Record<string, unknown>
+      w.__tileF = (f: number) => {
+        g.scale.z = f
+        g.position.z = pivotZ * (1 - f)
+        console.log('tileF', f, '-> pivotZ', pivotZ.toFixed(1))
+      }
+    }
+  }
+  const innerRef = (g: THREE.Group | null) => {
     if (g && import.meta.env.DEV) {
       ;(window as unknown as Record<string, unknown>).__tileShift = (dx: number, dz: number) => {
         g.position.x = -K * anchor.x + dx
@@ -133,13 +158,18 @@ export function TileGround() {
       }
     }
   }
+  // Outer group scales the tiles' north (z) axis by TILE_LAT_F about pivotZ so
+  // true-mercator imagery lands in the city's Blosm latitude frame. Inner group
+  // is the mercator->app transform.
   return (
-    <group
-      ref={groupRef}
-      position={[-K * anchor.x + TILE_DX, TILE_Y, K * anchor.y + TILE_DZ]}
-      scale={[K, 1, K]}
-    >
-      <primitive object={map} />
+    <group ref={outerRef} position={[0, 0, pivotZ * (1 - TILE_LAT_F)]} scale={[1, 1, TILE_LAT_F]}>
+      <group
+        ref={innerRef}
+        position={[-K * anchor.x + TILE_DX, TILE_Y, K * anchor.y + TILE_DZ]}
+        scale={[K, 1, K]}
+      >
+        <primitive object={map} />
+      </group>
     </group>
   )
 }
