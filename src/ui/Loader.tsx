@@ -1,11 +1,17 @@
 /**
  * Branded loading overlay while the city (GLB + satellite) streams in.
  * Metro gets a sliding Metropolis trainset, Water Metro a catamaran bobbing
- * over waves — both pure SVG/CSS, driven by drei's global load progress.
+ * over waves — both pure SVG/CSS, driven by drei's global load progress and
+ * the first batch of streaming map tiles (so the low-res -> high-res pop-in
+ * isn't visible on first paint).
  */
 import { useProgress } from '@react-three/drei'
 import { useEffect, useState } from 'react'
 import { useSimStore } from '../state/useSimStore'
+import { tilesSettled } from '../scene/TileGround'
+
+/** Hard cap so a slow/offline tile network never keeps the loader up forever. */
+const TILE_WAIT_MS = 9000
 
 function TrainLoader() {
   return (
@@ -70,12 +76,22 @@ export function Loader() {
   const [done, setDone] = useState(false)
   const [gone, setGone] = useState(false)
 
+  // Hold the overlay until BOTH the GLB/textures (drei) and the first tile
+  // batch are in — or the tile timeout elapses (offline/slow → fall back to
+  // the static overlay). Polled because tilesSettled() isn't reactive.
   useEffect(() => {
-    if (!active && progress >= 100 && !done) {
-      setDone(true)
-      const t = setTimeout(() => setGone(true), 700)
-      return () => clearTimeout(t)
-    }
+    if (done) return
+    const t0 = performance.now()
+    const id = setInterval(() => {
+      const glbReady = !active && progress >= 100
+      const groundReady = tilesSettled() || performance.now() - t0 > TILE_WAIT_MS
+      if (glbReady && groundReady) {
+        clearInterval(id)
+        setDone(true)
+        setTimeout(() => setGone(true), 700)
+      }
+    }, 200)
+    return () => clearInterval(id)
   }, [active, progress, done])
 
   const pinned = import.meta.env.DEV && window.location.search.includes('loader')

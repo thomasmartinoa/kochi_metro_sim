@@ -25,8 +25,29 @@ import { M_PER_DEG_LAT, ORIGIN_LAT, ORIGIN_LON } from '../sim/projection'
 /** Ground brightness 0..1, driven by Atmosphere's day/night keyframes. */
 export const groundDim = { value: 1 }
 
+/**
+ * Initial-load tracking so the branded Loader can stay up until the first
+ * batch of tiles has streamed in (otherwise the low-res -> high-res pop-in is
+ * visible on first paint). `pending` counts in-flight tile requests; once at
+ * least a few have loaded and pending drains to 0, the first view is settled.
+ */
+const tileLoad = { pending: 0, loaded: 0 }
+export function tilesSettled(): boolean {
+  return tileLoad.loaded >= 6 && tileLoad.pending === 0
+}
+
 /** Same height the static overlay used before; below roads (0.35) and rail. */
 const TILE_Y = -0.35
+
+/**
+ * OSM→Esri registration offset (app metres, +x east / +z south). The whole
+ * city (buildings, roads, water, the road-snapped viaduct) is georeferenced to
+ * OSM/Blosm, which sits a fixed ~tens of metres off Esri's true-world imagery.
+ * We shift the Esri tiles by this constant so they sit under the OSM city.
+ * Measured empirically against the Aluva terminus; see window.__tileShift.
+ */
+const TILE_DX = 0
+const TILE_DZ = 0
 
 class EsriProvider extends MapProvider {
   public name = 'esri-world-imagery'
@@ -34,19 +55,23 @@ class EsriProvider extends MapProvider {
   public maxZoom = 19
 
   public fetchTile(zoom: number, x: number, y: number): Promise<HTMLImageElement | HTMLCanvasElement> {
+    tileLoad.pending++
     return new Promise((resolve) => {
+      const done = (result: HTMLImageElement | HTMLCanvasElement, ok: boolean) => {
+        tileLoad.pending = Math.max(0, tileLoad.pending - 1)
+        if (ok) tileLoad.loaded++
+        resolve(result)
+      }
       const attempt = (n: number): void => {
         const img = new Image()
         img.crossOrigin = 'anonymous'
-        img.onload = () => resolve(img)
+        img.onload = () => done(img, true)
         img.onerror = () => {
           if (n < 3) setTimeout(() => attempt(n + 1), 500 * (n + 1))
-          else {
-            // fully transparent tile: with alphaTest on the tile materials the
-            // fragments are discarded, so the static overlay below shows
-            // through instead of a black square
-            resolve(document.createElement('canvas'))
-          }
+          // fully transparent tile: with alphaTest on the tile materials the
+          // fragments are discarded, so the static overlay below shows
+          // through instead of a black square
+          else done(document.createElement('canvas'), false)
         }
         img.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`
       }
@@ -98,8 +123,22 @@ export function TileGround() {
 
   if (!built) return null
   const { map, K, anchor } = built
+  // dev calibration: window.__tileShift(dx, dz) nudges tiles live to find TILE_DX/DZ
+  const groupRef = (g: THREE.Group | null) => {
+    if (g && import.meta.env.DEV) {
+      ;(window as unknown as Record<string, unknown>).__tileShift = (dx: number, dz: number) => {
+        g.position.x = -K * anchor.x + dx
+        g.position.z = K * anchor.y + dz
+        console.log('tileShift', dx, dz)
+      }
+    }
+  }
   return (
-    <group position={[-K * anchor.x, TILE_Y, K * anchor.y]} scale={[K, 1, K]}>
+    <group
+      ref={groupRef}
+      position={[-K * anchor.x + TILE_DX, TILE_Y, K * anchor.y + TILE_DZ]}
+      scale={[K, 1, K]}
+    >
       <primitive object={map} />
     </group>
   )
