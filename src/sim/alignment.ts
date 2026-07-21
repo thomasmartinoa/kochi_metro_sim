@@ -1,13 +1,17 @@
 /**
- * Track alignment in world space — GTFS shape geometry, laterally snapped to
- * the OSM road medians the viaduct actually follows (shape-corrected.json,
- * produced by the Blender pipeline). Distances (sKm) stay the GTFS values so
- * the timetable engine is untouched.
+ * Track alignment in world space — KMRL's official GTFS shape (true WGS84).
+ *
+ * This used to read shape-corrected.json, a copy laterally "snapped" to OSM
+ * road medians inside Blender. That snapping was chasing a phantom: the GTFS
+ * shape had been loaded into the Blender scene with the wrong metres-per-degree
+ * (110574 instead of Blosm's spherical-mercator 111319.49), so it sat up to
+ * ~100 m off the roads before any snapping happened, and converting back baked
+ * that error into the file. The official shape in true WGS84 lands on the real
+ * viaduct in the satellite imagery, so we use it directly.
  * World: +x east, +z south, +y up. Rail level at RAIL_LEVEL_M.
  */
 import { Vector3 } from 'three'
-import { stations } from '../data/network'
-import correctedShape from '../data/shape-corrected.json'
+import { gtfs, stations } from '../data/network'
 import { RAIL_LEVEL_M } from '../data/trainset'
 import { project } from './projection'
 
@@ -19,7 +23,7 @@ interface AlignmentPoint {
 }
 
 function buildPoints(): AlignmentPoint[] {
-  const raw = (correctedShape as [number, number, number][]).map(([lat, lon, d]) => {
+  const raw = (gtfs.shapeUp as unknown as [number, number, number][]).map(([lat, lon, d]) => {
     const { x, z } = project(lat, lon)
     return { pos: new Vector3(x, RAIL_LEVEL_M, z), sKm: d }
   })

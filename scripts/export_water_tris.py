@@ -13,7 +13,8 @@ argv = sys.argv[sys.argv.index('--') + 1:]
 LIB, OUT = argv
 
 LAT0, LON0 = 10.021240234375, 76.30382537841797
-M_LAT = 110574.0
+# Blosm projects with spherical-mercator scaling, not the true meridian arc.
+M_LAT = (math.pi * 6378137) / 180  # 111319.49 m/deg
 M_LON = 111320.0 * math.cos(math.radians(LAT0))
 
 bpy.ops.wm.read_factory_settings(use_empty=True)

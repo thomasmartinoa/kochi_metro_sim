@@ -40,20 +40,17 @@ export function tilesSettled(): boolean {
 const TILE_Y = -0.35
 
 /**
- * The whole app world (city GLB, roads, water, the road-snapped viaduct,
- * stations) lives in Blosm's coordinate frame: Blosm projects latitude with a
- * metre-per-degree that differs from true WGS84, and CityGLB's LAT_STRETCH
- * bakes that in. The Esri tiles are on TRUE web-mercator, so the two diverge
- * with a latitude-dependent SCALE (small at the Blosm origin, tens of metres by
- * Aluva) — not a constant offset. We correct the tiles' north axis by scaling
- * their Z by TILE_LAT_F about the Blosm-origin latitude line (LAT_PIVOT_Z), so
- * the imagery lands in the same frame as everything else.
+ * Latitude-axis correction for the tiles, scaled about the Blosm-origin
+ * latitude line. This is now 1.0 (identity): the tiles are true web-mercator
+ * and everything else is corrected to true WGS84 at its own source, so no
+ * warping of the imagery is needed.
  *
- * TILE_LAT_F = (Blosm metres-per-degree-lat) / 110574. Calibrated live with
- * window.__tileF(f) against the Aluva viaduct/river; 1.0 disables the fix.
- * A residual constant nudge (window.__tileShift) is available but should be ~0.
+ * (It was briefly 1.006739 to bend the imagery onto a city that CityGLB was
+ * mis-stretching. That matched the buildings but threw the GTFS metro off,
+ * because the metro is genuine WGS84 — the real bug was the city's stretch.)
+ * window.__tileF(f) still nudges it live if imagery ever needs re-checking.
  */
-const TILE_LAT_F = 1.006739
+const TILE_LAT_F = 1.0
 const TILE_DX = 0
 const TILE_DZ = 0
 /** Blosm scene geo-origin (must match CityGLB.ORIGIN); the lat pivot for the scale. */

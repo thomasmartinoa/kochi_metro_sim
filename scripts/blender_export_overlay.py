@@ -25,7 +25,8 @@ OUT = argv[0]
 LAT0 = float(argv[1]) if len(argv) > 1 else bpy.context.scene.get('lat')
 LON0 = float(argv[2]) if len(argv) > 2 else bpy.context.scene.get('lon')
 
-M_LAT = 110574.0
+# Blosm projects with spherical-mercator scaling, not the true meridian arc.
+M_LAT = (math.pi * 6378137) / 180  # 111319.49 m/deg
 M_LON = 111320.0 * math.cos(math.radians(LAT0))
 
 terrain = next(o for o in bpy.data.objects if o.type == 'MESH' and 'terrain' in o.name.lower())

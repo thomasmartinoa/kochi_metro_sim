@@ -17,7 +17,15 @@ import { project } from '../sim/projection'
 const CITY_URL = '/models/kochi-city-v2.glb?v=5'
 /** Blosm geo origin of the map_7 scene this GLB was exported from. */
 const ORIGIN = { lat: 10.040735244750977, lon: 76.28477096557617 }
-const LAT_STRETCH = 111320 / 110574
+/**
+ * Blosm projects the scene with spherical-mercator scaling — 111319.49 m per
+ * degree of latitude (pi * WGS84 equatorial radius / 180), NOT the true local
+ * meridian arc of ~110574 m/deg. This factor converts Blosm northing into the
+ * app's project() frame; it is ~1.0 because both use the same scale.
+ * (It was 111320/110574 = 1.00675, which stretched the city ~100 m over 15 km
+ * and pushed every building off the satellite imagery.)
+ */
+const LAT_STRETCH = 111320 / 111319.49
 
 /** Facade materials with emissive night windows — driven by Atmosphere. */
 export const cityEmissives: THREE.MeshStandardMaterial[] = []
