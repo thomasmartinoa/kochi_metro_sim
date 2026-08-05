@@ -3,6 +3,7 @@
  * Metro and Water Metro, each showing what's running right now.
  */
 import { useEffect, useState } from 'react'
+import { WATER_METRO_ENABLED } from '../config'
 import { fmtTime } from '../sim/clock'
 import { liveTrainStates, serviceStatusAt } from '../sim/engine'
 import { liveBoatStates, waterServiceStatusAt } from '../sim/waterEngine'
@@ -62,6 +63,7 @@ function PortalCard({
   titleMl,
   facts,
   liveLine,
+  comingSoon = false,
 }: {
   exp: Experience
   accent: string
@@ -70,24 +72,38 @@ function PortalCard({
   titleMl: string
   facts: string
   liveLine: React.ReactNode
+  comingSoon?: boolean
 }) {
   const setExperience = useSimStore((s) => s.setExperience)
   return (
     <button
-      onClick={() => setExperience(exp)}
-      className="hud-panel group pointer-events-auto flex w-[19rem] flex-col gap-2 px-5 py-4 text-left transition-all hover:-translate-y-1 max-sm:w-full"
+      onClick={() => !comingSoon && setExperience(exp)}
+      disabled={comingSoon}
+      aria-disabled={comingSoon}
+      className={`hud-panel group pointer-events-auto flex w-[19rem] flex-col gap-2 px-5 py-4 text-left transition-all max-sm:w-full ${
+        comingSoon ? 'cursor-default opacity-70' : 'hover:-translate-y-1'
+      }`}
       style={{ boxShadow: '0 4px 24px rgb(0 0 0 / 0.35)' }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = accent)}
+      onMouseEnter={(e) => !comingSoon && (e.currentTarget.style.borderColor = accent)}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = '')}
     >
       <div className="flex items-center justify-between">
         {glyph}
-        <span
-          className="font-display text-xs font-semibold tracking-widest opacity-0 transition-opacity group-hover:opacity-100"
-          style={{ color: accent }}
-        >
-          ENTER →
-        </span>
+        {comingSoon ? (
+          <span
+            className="rounded-full border px-2 py-0.5 font-display text-[10px] font-semibold tracking-widest"
+            style={{ color: accent, borderColor: accent }}
+          >
+            COMING SOON
+          </span>
+        ) : (
+          <span
+            className="font-display text-xs font-semibold tracking-widest opacity-0 transition-opacity group-hover:opacity-100"
+            style={{ color: accent }}
+          >
+            ENTER →
+          </span>
+        )}
       </div>
       <div className="leading-tight">
         <div className="font-display text-lg font-bold text-paper">{title}</div>
@@ -150,8 +166,11 @@ export function Landing() {
           title="Water Metro"
           titleMl="ജല മെട്രോ"
           facts="4 routes · 11 terminals · electric catamarans"
+          comingSoon={!WATER_METRO_ENABLED}
           liveLine={
-            boats > 0 ? (
+            !WATER_METRO_ENABLED ? (
+              <>launching soon on the backwaters</>
+            ) : boats > 0 ? (
               <>
                 <span className="live-dot inline-block h-2 w-2 rounded-full" style={{ background: '#22D3EE' }} />
                 {boats} boats sailing now

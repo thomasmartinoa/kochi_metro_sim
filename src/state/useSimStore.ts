@@ -5,6 +5,7 @@
  * synced with the URL hash (#/, #/metro, #/water) in App.tsx.
  */
 import { create } from 'zustand'
+import { WATER_METRO_ENABLED } from '../config'
 
 export type Experience = 'landing' | 'metro' | 'water'
 export type AppMode = 'tracker' | 'explore' | 'drive'
@@ -47,12 +48,16 @@ export const useSimStore = create<SimStore>((set, get) => ({
   selection: null,
 
   setExperience: (e) =>
-    set((s) => ({
-      experience: e,
-      selection: null,
-      // drive mode is metro-only
-      appMode: e === 'water' && s.appMode === 'drive' ? 'tracker' : s.appMode,
-    })),
+    set((s) => {
+      // Water Metro is "coming soon" until the flag is on — never enter it.
+      const exp: Experience = e === 'water' && !WATER_METRO_ENABLED ? 'landing' : e
+      return {
+        experience: exp,
+        selection: null,
+        // drive mode is metro-only
+        appMode: exp === 'water' && s.appMode === 'drive' ? 'tracker' : s.appMode,
+      }
+    }),
   setAppMode: (m) => set({ appMode: m }),
   goLive: () => set({ clockMode: 'live', speed: 1, epochMs: Date.now() }),
   scrubToDaySec: (daySec) => {
