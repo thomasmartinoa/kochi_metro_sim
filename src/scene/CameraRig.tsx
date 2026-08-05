@@ -12,6 +12,7 @@ import { trainStateById } from '../sim/engine'
 import { poseAtWater, terminalPoses } from '../sim/waterAlignment'
 import { boatStateById, terminals } from '../sim/waterEngine'
 import { useSimStore } from '../state/useSimStore'
+import { firstLoad } from './firstLoad'
 
 interface ControlsLike {
   target: THREE.Vector3
@@ -31,6 +32,8 @@ export function CameraRig() {
   const flyGoal = useRef<{ cam: THREE.Vector3; target: THREE.Vector3 } | null>(null)
   const pose = useRef({ pos: new THREE.Vector3(), heading: new THREE.Vector3() })
   const tmp = useRef(new THREE.Vector3())
+  // elapsedTime at which the landing drift is released, so it starts at phase 0
+  const landingT0 = useRef(0)
 
   // react to experience + selection changes
   useEffect(
@@ -89,7 +92,18 @@ export function CameraRig() {
     const store = useSimStore.getState()
     // landing: slow cinematic drift over the harbour where both systems meet
     if (store.experience === 'landing') {
-      const t = state.clock.elapsedTime * 0.045
+      // Until the opening view has streamed in (loader still up), hold the
+      // camera dead still at the drift's phase-0 pose so the map tiles resolve
+      // for exactly this frame — no drifting into un-loaded tiles behind the
+      // loader. Keep t0 pinned to "now" so the drift begins at phase 0 on reveal.
+      if (!firstLoad.ready) {
+        landingT0.current = state.clock.elapsedTime
+        camera.position.set(LANDING_FOCUS.x + 950, 330, LANDING_FOCUS.z)
+        controls.target.copy(LANDING_FOCUS)
+        controls.update()
+        return
+      }
+      const t = (state.clock.elapsedTime - landingT0.current) * 0.045
       const cx = LANDING_FOCUS.x + Math.cos(t) * 950
       const cz = LANDING_FOCUS.z + Math.sin(t) * 950
       camera.position.lerp(tmp.current.set(cx, 330, cz), Math.min(1, dt * 1.2))

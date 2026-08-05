@@ -8,10 +8,13 @@
 import { useProgress } from '@react-three/drei'
 import { useEffect, useState } from 'react'
 import { useSimStore } from '../state/useSimStore'
+import { firstLoad } from '../scene/firstLoad'
 import { tilesSettled } from '../scene/TileGround'
 
-/** Hard cap so a slow/offline tile network never keeps the loader up forever. */
-const TILE_WAIT_MS = 9000
+/** Hard cap so a slow/offline tile network never keeps the loader up forever.
+ *  Generous because the landing panorama is wide (many tiles) and the camera is
+ *  held still until they settle — the cap is only a dead-network guard. */
+const TILE_WAIT_MS = 14000
 
 function TrainLoader() {
   return (
@@ -87,6 +90,8 @@ export function Loader() {
       const groundReady = tilesSettled() || performance.now() - t0 > TILE_WAIT_MS
       if (glbReady && groundReady) {
         clearInterval(id)
+        // release the landing camera drift and reveal in one go
+        firstLoad.ready = true
         setDone(true)
         setTimeout(() => setGone(true), 700)
       }

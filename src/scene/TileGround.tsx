@@ -26,14 +26,22 @@ import { M_PER_DEG_LAT, ORIGIN_LAT, ORIGIN_LON } from '../sim/projection'
 export const groundDim = { value: 1 }
 
 /**
- * Initial-load tracking so the branded Loader can stay up until the first
- * batch of tiles has streamed in (otherwise the low-res -> high-res pop-in is
- * visible on first paint). `pending` counts in-flight tile requests; once at
- * least a few have loaded and pending drains to 0, the first view is settled.
+ * Initial-load tracking so the branded Loader can stay up until the opening
+ * view's tiles have fully streamed in (otherwise the low-res -> high-res pop-in
+ * is visible on first paint). `pending` counts in-flight tile requests and
+ * `lastBusyAt` the last time any fetch started or finished — so "settled" means
+ * a real quiet period, not a transient dip to 0 between LOD waves while the
+ * camera is still resolving the view.
  */
-const tileLoad = { pending: 0, loaded: 0 }
+const tileLoad = { pending: 0, loaded: 0, lastBusyAt: 0 }
+const MIN_TILES = 6
+const STABLE_MS = 600
 export function tilesSettled(): boolean {
-  return tileLoad.loaded >= 6 && tileLoad.pending === 0
+  return (
+    tileLoad.loaded >= MIN_TILES &&
+    tileLoad.pending === 0 &&
+    performance.now() - tileLoad.lastBusyAt >= STABLE_MS
+  )
 }
 
 /** Same height the static overlay used before; below roads (0.35) and rail. */
@@ -63,9 +71,11 @@ class EsriProvider extends MapProvider {
 
   public fetchTile(zoom: number, x: number, y: number): Promise<HTMLImageElement | HTMLCanvasElement> {
     tileLoad.pending++
+    tileLoad.lastBusyAt = performance.now()
     return new Promise((resolve) => {
       const done = (result: HTMLImageElement | HTMLCanvasElement, ok: boolean) => {
         tileLoad.pending = Math.max(0, tileLoad.pending - 1)
+        tileLoad.lastBusyAt = performance.now()
         if (ok) tileLoad.loaded++
         resolve(result)
       }
