@@ -7,9 +7,15 @@ import type { ServiceId } from '../data/types'
 export const IST_OFFSET_SEC = 5.5 * 3600
 export const DAY_SEC = 86_400
 
-/** IST seconds-of-day + IST day-of-week (0=Sun..6=Sat) for a UTC epoch ms. */
+/**
+ * IST seconds-of-day + IST day-of-week (0=Sun..6=Sat) for a UTC epoch ms.
+ *
+ * daySec keeps its fraction on purpose. Flooring to whole seconds here quantises
+ * every train's position to one update per second — at line speed that is a ~9 m
+ * jump per frame-group, which reads as the whole system moving in steps.
+ */
 export function istDayTime(epochMs: number): { daySec: number; dow: number } {
-  const istSec = Math.floor(epochMs / 1000) + IST_OFFSET_SEC
+  const istSec = epochMs / 1000 + IST_OFFSET_SEC
   const daySec = ((istSec % DAY_SEC) + DAY_SEC) % DAY_SEC
   // 1970-01-01 was a Thursday (dow 4)
   const dow = (Math.floor(istSec / DAY_SEC) + 4) % 7

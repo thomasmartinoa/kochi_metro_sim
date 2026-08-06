@@ -13,7 +13,7 @@ import { useSimStore } from '../state/useSimStore'
 import { cityEmissives } from './CityGLB'
 import { groundDim } from './TileGround'
 import { mat } from './materials'
-import { updateSkyEnv } from './skyEnv'
+import { updateSkyEnv } from './metroMaterials'
 
 interface Key {
   h: number

@@ -17,13 +17,13 @@ import { Text, useGLTF } from '@react-three/drei'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import labelFont from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff?url'
-import { G_MAX, centerAt, sAtG, stationPoses } from '../sim/alignment'
+import { G_END, G_START, centerAtG, stationPoses } from '../sim/alignment'
 import { SPAN_PITCH_M } from '../data/trainset'
 import { useSimStore } from '../state/useSimStore'
-import { useSkyEnv } from './skyEnv'
+import { prepareMetroMaterial } from './metroMaterials'
 
-const SPAN_URL = '/models/metro-span.glb?v=1'
-const STATION_URL = '/models/metro-station.glb?v=1'
+const SPAN_URL = '/models/metro-span.glb?v=2'
+const STATION_URL = '/models/metro-station.glb?v=2'
 /** spans per instanced chunk — small enough to cull, large enough to stay cheap */
 const SPANS_PER_CHUNK = 24
 
@@ -39,7 +39,7 @@ function useParts(url: string) {
       const geo = o.geometry.clone()
       geo.applyMatrix4(o.matrixWorld) // bake the node transform into the geometry
       const mats = Array.isArray(o.material) ? o.material : [o.material]
-      useSkyEnv(mats[0])
+      prepareMetroMaterial(mats[0])
       parts.push({ geometry: geo, material: mats[0] })
     })
     return parts
@@ -54,8 +54,8 @@ function useSpanChunks() {
     const one = new THREE.Vector3(1, 1, 1)
     // stepped in true metres: the spans butt end to end, so pacing them by GTFS
     // chainage (which drifts 0.7-1.6x locally) would tear gaps in the deck
-    for (let g = 0; g <= G_MAX; g += SPAN_PITCH_M) {
-      const { pos, tan } = centerAt(sAtG(g))
+    for (let g = G_START; g <= G_END; g += SPAN_PITCH_M) {
+      const { pos, tan } = centerAtG(g)
       // the model's length runs along +Z, so aim +Z down the track tangent
       q.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tan.clone().setY(0).normalize())
       all.push(new THREE.Matrix4().compose(pos, q, one))

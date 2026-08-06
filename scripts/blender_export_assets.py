@@ -139,9 +139,31 @@ print(f'station baked X[{lo.x:.2f},{hi.x:.2f}] Y[{lo.y:.2f},{hi.y:.2f}] Z[{lo.z:
 export(stn, 'metro-station')
 
 # ------------------------------------------------------------------ train
-# main_train + wheels, split into the 3 cars so the app can pose each car on
-# the curve (a rigid 56 m body would cut Kochi's tighter corners).
-train = mesh_objs('main_train') + mesh_objs('metrunder parts')
+# Split into the 3 cars so the app can pose each on the curve (a rigid 56 m body
+# would cut Kochi's tighter corners).
+#
+# The collections OVERLAP: main_train already holds every Bogie_Wheel_* (the
+# whole of 'metrunder parts') and every Cockpit_*/Driver_Seat_* (the whole of
+# 'cockpit'). Concatenating them listed each wheel twice, so bake_transform ran
+# on it twice — a double rotate + double translate that flung the wheels ~48 m
+# sideways down to ground level, where they trailed the train across the map.
+# Collect by identity, once.
+cockpit_names = {o.name for o in mesh_objs('cockpit')}
+train = []
+seen = set()
+for o in mesh_objs('main_train') + mesh_objs('metrunder parts'):
+    if o.name in seen:
+        continue
+    seen.add(o.name)
+    # The cab interior is sealed behind the bodyshell and its own glazing: it is
+    # never visible from outside, but it is ~half of each car's materials and so
+    # ~half of the draw calls for all 26 pooled trains. It ships separately as
+    # metro-cockpit.glb for the drive-mode cab view.
+    if o.name in cockpit_names:
+        continue
+    train.append(o)
+print(f'train objects: {len(train)} (skipped {len(cockpit_names)} cab-interior)')
+
 cars = [[], [], []]
 for o in train:
     lo, hi = world_bbox([o])

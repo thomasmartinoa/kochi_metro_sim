@@ -5,19 +5,16 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Component, Suspense, useEffect, type ReactNode } from 'react'
 import type * as THREE from 'three'
-import overlayMeta from '../data/kochi-overlay-meta.json'
 import { centerAt } from '../sim/alignment'
-import { project } from '../sim/projection'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { mat } from './materials'
 import { Atmosphere } from './Atmosphere'
 import { Boats } from './Boats'
-import { CameraRig } from './CameraRig'
+import { CameraController } from './CameraController'
 import { City, Palms } from './City'
 import { CityGLB } from './CityGLB'
 import { DriveTrain } from './DriveTrain'
-import { KeyboardFly } from './KeyboardFly'
 import { Line3D } from './Line3D'
 import { PinkLine } from './PinkLine'
 import { PostFX } from './PostFX'
@@ -42,70 +39,6 @@ class CityBoundary extends Component<{ children: ReactNode }, { failed: boolean 
 function ClockTick() {
   useFrame((_, dt) => {
     useSimStore.getState().tick(Math.min(dt, 0.25) * 1000)
-  })
-  return null
-}
-
-/* ============================================================================
- * CAMERA LIMITS — adjust these to taste.
- *   MIN_CAM_Y   : lowest the eye may sit (metres). Stops going under the map.
- *   MAX_CAM_Y   : highest the eye may sit (metres). Stops flying too high with
- *                 Q/E. Lower it for a tighter ceiling.
- *   MAP_INSET_M : how far INSIDE the aerial map's edge the camera must stay
- *                 (metres). Raise it to keep the border further out of frame.
- *   maxDistance (on <OrbitControls> below): how far you can zoom/dolly out.
- *                 Beyond it the aerial map's edge shows.
- * ==========================================================================*/
-const MIN_CAM_Y = 8
-const MAX_CAM_Y = 2600
-const MAP_INSET_M = 1500
-
-/** Horizontal walls, derived from the real aerial sheet's bounds. */
-const MAP_BOUNDS = (() => {
-  const nw = project(overlayMeta.north, overlayMeta.west)
-  const se = project(overlayMeta.south, overlayMeta.east)
-  return {
-    minX: Math.min(nw.x, se.x) + MAP_INSET_M,
-    maxX: Math.max(nw.x, se.x) - MAP_INSET_M,
-    minZ: Math.min(nw.z, se.z) + MAP_INSET_M,
-    maxZ: Math.max(nw.z, se.z) - MAP_INSET_M,
-  }
-})()
-
-const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
-
-/**
- * Keeps the camera inside the map. OrbitControls' polar limit and maxDistance
- * only bound orbiting/dollying; WASD+Q/E flight (KeyboardFly) can still push the
- * eye under the map, arbitrarily high, or off the sheet entirely — so clamp all
- * three axes here every frame. The orbit target moves with the eye so the view
- * direction never snaps. Drive mode owns its own camera (cab sits low on purpose).
- */
-function CameraBounds() {
-  const camera = useThree((s) => s.camera)
-  const controls = useThree((s) => s.controls) as {
-    target?: THREE.Vector3
-    update?: () => void
-  } | null
-  useFrame(() => {
-    if (useSimStore.getState().appMode === 'drive') return
-    const p = camera.position
-    const nx = clamp(p.x, MAP_BOUNDS.minX, MAP_BOUNDS.maxX)
-    const ny = clamp(p.y, MIN_CAM_Y, MAX_CAM_Y)
-    const nz = clamp(p.z, MAP_BOUNDS.minZ, MAP_BOUNDS.maxZ)
-    if (nx === p.x && ny === p.y && nz === p.z) return
-    const dx = nx - p.x
-    const dy = ny - p.y
-    const dz = nz - p.z
-    p.set(nx, ny, nz)
-    if (controls?.target && controls.update) {
-      controls.target.set(
-        controls.target.x + dx,
-        controls.target.y + dy,
-        controls.target.z + dz,
-      )
-      controls.update()
-    }
   })
   return null
 }
@@ -198,9 +131,7 @@ export function World() {
       <WaterTerminals />
       <WaterRouteLanes />
       <ClockTick />
-      <CameraRig />
-      <KeyboardFly />
-      <CameraBounds />
+      <CameraController />
       <DevCam />
       <PostFX />
 
@@ -208,7 +139,9 @@ export function World() {
         makeDefault
         target={[mid.pos.x, 30, mid.pos.z]}
         maxPolarAngle={Math.PI * 0.49}
-        minDistance={60}
+        // close enough to stand beside a trainset; the controller's floor
+        // (MIN_CAM_Y) is what actually keeps the eye above ground
+        minDistance={18}
         // Pulled in to 3.6 km: beyond this the aerial sheet's edge creeps into
         // frame at the top. At this distance the corridor city fills the view
         // and the horizon is already faded to haze/sky.

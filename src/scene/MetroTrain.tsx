@@ -18,10 +18,10 @@
 import { Detailed, useGLTF } from '@react-three/drei'
 import { useMemo } from 'react'
 import * as THREE from 'three'
-import { useSkyEnv } from './skyEnv'
+import { prepareMetroMaterial } from './metroMaterials'
 
-const FULL_URLS = [0, 1, 2].map((i) => `/models/metro-car${i}.glb?v=1`)
-const LOD_URLS = [0, 1, 2].map((i) => `/models/metro-car${i}-lod.glb?v=1`)
+const FULL_URLS = [0, 1, 2].map((i) => `/models/metro-car${i}.glb?v=2`)
+const LOD_URLS = [0, 1, 2].map((i) => `/models/metro-car${i}-lod.glb?v=2`)
 /** slot 0 leads the train, slot 2 trails it -> model index */
 const SLOT_MODEL = [2, 1, 0] as const
 const LOD_SWITCH_M = 320
@@ -40,7 +40,7 @@ export function flattenScene(scene: THREE.Object3D): Part[] {
     const geometry = o.geometry.clone()
     geometry.applyMatrix4(o.matrixWorld)
     const material = Array.isArray(o.material) ? o.material[0] : o.material
-    useSkyEnv(material)
+    prepareMetroMaterial(material)
     parts.push({ geometry, material })
   })
   return parts
