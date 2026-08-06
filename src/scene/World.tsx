@@ -104,8 +104,10 @@ export function World() {
       <Atmosphere />
 
       {/* Fills the horizon beyond the aerial sheet's ~31 km extent. Kept far
-          below it so it can never win the depth test and sheet over the city. */}
-      <mesh material={mat.ground} rotation={[-Math.PI / 2, 0, 0]} position={[0, -120, 0]}>
+          below it so it can never win the depth test and sheet over the city,
+          and painted the fog colour (see mat.horizon) so its edge dissolves
+          into haze rather than drawing a line across the horizon. */}
+      <mesh material={mat.horizon} rotation={[-Math.PI / 2, 0, 0]} position={[0, -120, 0]}>
         <planeGeometry args={[60000, 60000]} />
       </mesh>
 

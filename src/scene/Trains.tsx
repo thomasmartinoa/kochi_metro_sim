@@ -14,6 +14,10 @@ import { CarModel, useCarParts, type Part } from './MetroTrain'
 
 const POOL = 26
 const CAR_LEN = MODEL_CAR_PITCH_M
+/** radius the marker geometry is authored at, in world units */
+const MARKER_RADIUS = 4.2
+/** how much of the viewport's height the marker disc should span, at any zoom */
+const MARKER_SCREEN_FRAC = 0.022
 
 function TrainModel({ parts }: { parts: Part[][] }) {
   return (
@@ -40,6 +44,14 @@ export function Trains() {
 
   const pose = useMemo(() => ({ pos: new THREE.Vector3(), heading: new THREE.Vector3() }), [])
   const lookTarget = useMemo(() => new THREE.Vector3(), [])
+
+  // world units per metre of camera distance that keep the marker a fixed
+  // fraction of screen height (MARKER_SCREEN_FRAC), whatever the zoom
+  const markerScale = useMemo(() => {
+    const cam = camera as THREE.PerspectiveCamera
+    const fov = (cam.isPerspectiveCamera ? cam.fov : 50) * (Math.PI / 180)
+    return (2 * Math.tan(fov / 2) * MARKER_SCREEN_FRAC) / MARKER_RADIUS
+  }, [camera])
 
   useFrame(() => {
     const epochMs = useSimStore.getState().epochMs
@@ -76,7 +88,12 @@ export function Trains() {
       markerMesh.material = st.dir === 0 ? mat.markerUp : mat.markerDown
       const sel = useSimStore.getState().selection
       const isSelected = sel?.kind === 'train' && sel.id === st.tripId
-      marker.scale.setScalar(isSelected ? 1.5 : 1)
+      // Hold a constant size on screen. A fixed world-space disc swamps the
+      // train close up and disappears from across the city; this is a click
+      // target, so what matters is how big it is under the cursor. Scale by
+      // distance (and vertical FOV, so it survives a resize) to keep it there.
+      const dist = camera.position.distanceTo(marker.position)
+      marker.scale.setScalar(dist * markerScale * (isSelected ? 1.4 : 1))
     }
   })
 

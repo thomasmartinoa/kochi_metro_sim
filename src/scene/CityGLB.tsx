@@ -13,6 +13,7 @@ import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
 import { project } from '../sim/projection'
+import { lightWithSky } from './metroMaterials'
 
 const CITY_URL = '/models/kochi-city-v2.glb?v=5'
 /** Blosm geo origin of the map_7 scene this GLB was exported from. */
@@ -29,6 +30,8 @@ const LAT_STRETCH = 111320 / 111319.49
 
 /** Facade materials with emissive night windows — driven by Atmosphere. */
 export const cityEmissives: THREE.MeshStandardMaterial[] = []
+/** The backwaters, so Atmosphere can hand them a sky to reflect. */
+export const cityWater: THREE.MeshStandardMaterial[] = []
 
 export function CityGLB() {
   const { scene } = useGLTF(CITY_URL, '/draco/')
@@ -37,6 +40,7 @@ export function CityGLB() {
 
   useEffect(() => {
     cityEmissives.length = 0
+    cityWater.length = 0
     const maxAniso = gl.capabilities.getMaxAnisotropy()
     scene.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return
@@ -58,10 +62,27 @@ export function CityGLB() {
           m.emissiveIntensity = 0
           cityEmissives.push(m)
         }
+        if (m.name === 'KochiWater') {
+          // Authored as a near-mirror (roughness 0.12), which turns each
+          // directional light into one hard white blob sitting on an otherwise
+          // flat navy sheet — the least water-like thing a surface can do.
+          // Real backwater is choppy and mostly shows a broad sky sheen, so:
+          // roughen it until the highlight spreads out, and let it go partly
+          // transparent so the satellite imagery underneath supplies the real
+          // colour and shoreline detail instead of a painted-on slab.
+          m.roughness = 0.42
+          m.metalness = 0.02
+          m.transparent = true
+          m.opacity = 0.78
+          m.depthWrite = true
+          lightWithSky(m, 0.6) // a broad sky sheen, not a mirror
+          cityWater.push(m)
+        }
       }
     })
     return () => {
       cityEmissives.length = 0
+      cityWater.length = 0
     }
   }, [scene, gl])
 

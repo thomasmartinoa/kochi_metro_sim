@@ -55,9 +55,10 @@ console.log('\n=== blender export ===')
 run(BLENDER, ['-b', '--factory-startup', '-P', join(ROOT, 'scripts/blender_export_assets.py'),
   '--', LIB, raw])
 
-const ASSETS = ['metro-span', 'metro-station', 'metro-car0', 'metro-car1', 'metro-car2',
-  'metro-cockpit']
 const CARS = ['metro-car0', 'metro-car1', 'metro-car2']
+/** `-ext` is the same car without its cab interior; it is what the LOD is built from */
+const ASSETS = ['metro-span', 'metro-station', 'metro-cockpit',
+  ...CARS, ...CARS.map((c) => `${c}-ext`)]
 /** how much of each car's geometry the distant LOD keeps */
 const LOD_RATIO = '0.35'
 
@@ -72,14 +73,23 @@ for (const name of ASSETS) {
   const webp = join(work, `${name}.webp.glb`)
   run(process.execPath, [join(ROOT, 'scripts/optimize-assets.mjs'), src, webp, '1024'])
   const out = join(OUT, `${name}.glb`)
+  // --palette false: the palette pass merges every flat-coloured material into
+  // one shared texture and renames them PaletteMaterialNNN. That loses the
+  // authored names the app keys its glass/paint rules off, and packs wildly
+  // different colours into adjacent texels of a tiny image — where lossy
+  // texture compression bleeds the black underframe straight into the white
+  // bodywork, which is what turned the trainset dark.
   gltf(['optimize', webp, out, '--compress', 'draco',
-    '--texture-compress', 'false', '--simplify', 'false'])
+    '--texture-compress', 'false', '--simplify', 'false', '--palette', 'false'])
   console.log(`  -> ${name}.glb ${mb(out)} MB`)
 }
 
 // ------------------------------------------------------------------ 4. LODs
 for (const name of CARS) {
-  const src = join(OUT, `${name}.glb`)
+  // built from the cab-less variant where there is one — the interior is not
+  // legible at LOD range and it is most of a driving car's material count
+  const extPath = join(OUT, `${name}-ext.glb`)
+  const src = existsSync(extPath) ? extPath : join(OUT, `${name}.glb`)
   if (!existsSync(src)) continue
   const out = join(OUT, `${name}-lod.glb`)
   console.log(`\n=== ${name}-lod ===`)
@@ -89,6 +99,8 @@ for (const name of CARS) {
   gltf(['simplify', src, plain, '--ratio', LOD_RATIO, '--error', '0.01'])
   gltf(['draco', plain, out])
   console.log(`  -> ${name}-lod.glb ${mb(out)} MB`)
+  // the -ext build was only scaffolding for the LOD
+  rmSync(extPath, { force: true })
 }
 
 rmSync(work, { recursive: true, force: true })

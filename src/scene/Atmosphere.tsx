@@ -49,6 +49,7 @@ export function Atmosphere() {
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
   const sunRef = useRef<THREE.DirectionalLight>(null)
+  const fillRef = useRef<THREE.DirectionalLight>(null)
   const hemiRef = useRef<THREE.HemisphereLight>(null)
   const skyRef = useRef<THREE.Mesh<THREE.BoxGeometry, THREE.ShaderMaterial>>(null)
 
@@ -113,11 +114,19 @@ export function Atmosphere() {
       sunRef.current.color.copy(cols.sun)
     }
     if (hemiRef.current) hemiRef.current.intensity = hemiI
+    // The fill light used to hold a fixed 0.4 all night, and the backwaters are
+    // glossy enough to turn it into a bright specular blob floating on dark
+    // water hours after sunset. Fade it with the sun like everything else.
+    if (fillRef.current) fillRef.current.intensity = 0.06 + sunI * 0.21
 
     // unlit streamed satellite tiles follow the scene's light level
     groundDim.value = THREE.MathUtils.clamp(0.08 + hemiI * 0.58 + sunI * 0.22, 0.16, 1)
 
-    // metal on the authored metro models needs a sky to reflect (see skyEnv)
+    // the backdrop past the map's edge is the haze, so it wears the fog colour
+    mat.horizon.color.copy(cols.fog)
+
+    // metal on the authored metro models needs a sky to reflect, and so does
+    // water — a broad sky reflection is most of what makes it read as water
     updateSkyEnv(gl, cols.sky, cols.fog, sunI)
 
     // night glow: train windows + platform light strips + brighter tusk LEDs
@@ -144,7 +153,7 @@ export function Atmosphere() {
       />
       <hemisphereLight ref={hemiRef} args={['#DFF3F0', '#5C6B58', 1.1]} />
       <directionalLight ref={sunRef} position={[4000, 6000, -2500]} intensity={1.6} color="#FFF4DC" />
-      <directionalLight position={[-3500, 2600, 4000]} intensity={0.4} color="#DCEFF5" />
+      <directionalLight ref={fillRef} position={[-3500, 2600, 4000]} intensity={0.4} color="#DCEFF5" />
     </>
   )
 }

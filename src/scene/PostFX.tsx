@@ -16,12 +16,13 @@ export function PostFX() {
   return (
     <EffectComposer multisampling={0}>
       <Bloom
-        intensity={0.85}
-        // only genuinely bright things glow, not every sunlit facade
-        luminanceThreshold={0.75}
-        luminanceSmoothing={0.3}
+        intensity={0.42}
+        // only genuinely bright things glow, not every sunlit facade or the
+        // white flank of a passing train
+        luminanceThreshold={0.85}
+        luminanceSmoothing={0.25}
         mipmapBlur
-        radius={0.75}
+        radius={0.7}
       />
     </EffectComposer>
   )

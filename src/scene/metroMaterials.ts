@@ -39,10 +39,21 @@ const COLOR_EPS = 0.05
 /** how much brighter true daylight is than the palette's display colours */
 const RADIANCE = (sunI: number) => 0.35 + sunI * 1.5
 
-/** station glazing: translucent panels, not physical glass */
-const GLASS_OPACITY = 0.72
-/** baked textures already contain their lighting — let the env barely touch them */
-const BAKED_ENV = 0.18
+/**
+ * Per-glass opacity, by the material names the Blender scene actually uses.
+ * Nothing here is physical transmission — see the note in prepareMetroMaterial.
+ *
+ * The saloon windows are nearly opaque on purpose: the passenger cabin has no
+ * modelled interior, so anything you can see through them is empty space.
+ * The cab glass is genuinely see-through because there IS a cab behind it.
+ */
+const GLASS_OPACITY: { test: RegExp; opacity: number }[] = [
+  { test: /^Glass_bogy$/i, opacity: 0.9 }, // saloon windows — hide the empty shell
+  { test: /^(Glass|M_Cockpit_glass|M_Headlight_glass)$/i, opacity: 0.5 }, // cab + door glazing
+  { test: /glass/i, opacity: 0.72 }, // station grid panels and anything else
+]
+/** baked textures already contain their diffuse lighting — a light touch of sky */
+const BAKED_ENV = 0.4
 /**
  * >1 on purpose. The trainset's bodywork is authored at metalness ~1, and a
  * fully rough metal returns only a fraction of what it receives, so it needs
@@ -64,6 +75,23 @@ const _ground = new THREE.Color()
 const _row = new THREE.Color()
 
 /**
+ * Light a material with the sky environment at the given strength. Idempotent.
+ * Used on its own for anything that just wants a sky to reflect — the city's
+ * backwaters — and internally by prepareMetroMaterial.
+ */
+export function lightWithSky(material: THREE.Material, intensity: number): void {
+  if (!(material as THREE.MeshStandardMaterial).isMeshStandardMaterial) return
+  const m = material as THREE.MeshStandardMaterial
+  m.envMapIntensity = intensity
+  if (materials.has(m)) return
+  materials.add(m)
+  if (target) {
+    m.envMap = target.texture
+    m.needsUpdate = true
+  }
+}
+
+/**
  * Normalise one material off an authored metro GLB and light it with the sky.
  * Idempotent — safe to call for every mesh of every load.
  */
@@ -71,31 +99,32 @@ export function prepareMetroMaterial(material: THREE.Material): void {
   if (!(material as THREE.MeshStandardMaterial).isMeshStandardMaterial) return
   const m = material as THREE.MeshStandardMaterial
   if (materials.has(m)) return
-  materials.add(m)
 
   const phys = m as THREE.MeshPhysicalMaterial
-  const isGlass = /glass/i.test(m.name)
+  const glass = GLASS_OPACITY.find((g) => g.test.test(m.name))
   const isBaked = /_baked_mat$/i.test(m.name)
 
-  if (phys.transmission > 0) {
-    // never physical transmission: opaque things lose their colour entirely
-    phys.transmission = 0
-    if (isGlass) {
-      m.transparent = true
-      m.opacity = GLASS_OPACITY
-      // the panels are double-sided, so two layers stack to ~0.92 opaque;
-      // skipping depth writes keeps them from occluding each other
-      m.depthWrite = false
-    }
+  // Never physical transmission. The export writes KHR_materials_transmission
+  // at full strength onto anything the author gave a Transmission Weight —
+  // including the station's roof arch, whose mask only marks *part* of it as
+  // glass. In three that is all-or-nothing see-through, so the roof lost its
+  // colour entirely. Glazing is done as plain translucency instead.
+  if (phys.transmission > 0) phys.transmission = 0
+
+  if (glass) {
+    m.transparent = true
+    m.opacity = glass.opacity
+    // panels are double-sided, so two layers stack; skipping depth writes stops
+    // them occluding each other, but only where enough light gets through to
+    // notice — a near-opaque pane is better off sorting normally
+    m.depthWrite = glass.opacity >= 0.85
   }
 
-  if (isBaked) {
-    m.metalness = 0
-    m.roughness = 1
-  }
-  m.envMapIntensity = isBaked ? BAKED_ENV : PBR_ENV
-
-  if (target) m.envMap = target.texture
+  // Baked surfaces keep the metal/roughness maps they were authored with — the
+  // roof's glazed panels are glossy on purpose and read as flat black without
+  // them. They just get a gentler share of the sky, because their diffuse
+  // lighting is already painted into the texture.
+  lightWithSky(m, isBaked ? BAKED_ENV : PBR_ENV)
   m.needsUpdate = true
 }
 

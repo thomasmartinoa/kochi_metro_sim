@@ -45,9 +45,13 @@ const newImages = await Promise.all(
     const off = bv.byteOffset ?? 0
     const src = bin.subarray(off, off + bv.byteLength)
     const meta = await sharp(src).metadata()
+    // Small images are lookup tables, not photographs: palettes, masks, ramps.
+    // Neighbouring texels are unrelated colours, so lossy compression bleeds
+    // them into each other. Keep those exact; only photographic maps get q85.
+    const lossless = meta.width <= 64 || meta.height <= 64
     const out = await sharp(src)
       .resize(Math.min(meta.width, MAX), Math.min(meta.height, MAX), { fit: 'inside' })
-      .webp({ quality: 85 })
+      .webp(lossless ? { lossless: true } : { quality: 85 })
       .toBuffer()
     return { img, data: out, before: src.length }
   }),
