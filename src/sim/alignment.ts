@@ -12,14 +12,17 @@
  */
 import { Vector3 } from 'three'
 import { gtfs, stations } from '../data/network'
-import { RAIL_LEVEL_M } from '../data/trainset'
+import { RAIL_LEVEL_M, TRACK_OFFSET_M } from '../data/trainset'
 import { project } from './projection'
 
 interface AlignmentPoint {
   pos: Vector3
   /** unit tangent pointing toward increasing s */
   tan: Vector3
+  /** GTFS chainage (km) — the timetable's coordinate */
   sKm: number
+  /** cumulative length along the projected polyline (m) — the world's coordinate */
+  gM: number
 }
 
 function buildPoints(): AlignmentPoint[] {
@@ -36,17 +39,21 @@ function buildPoints(): AlignmentPoint[] {
     })
     smoothed.forEach((v, i) => raw[i].pos.copy(v))
   }
+  let gM = 0
   return raw.map((p, i) => {
     const a = raw[Math.max(0, i - 1)].pos
     const b = raw[Math.min(raw.length - 1, i + 1)].pos
     const tan = b.clone().sub(a).setY(0).normalize()
-    return { pos: p.pos, tan, sKm: p.sKm }
+    if (i > 0) gM += p.pos.distanceTo(raw[i - 1].pos)
+    return { pos: p.pos, tan, sKm: p.sKm, gM }
   })
 }
 
 export const alignment: AlignmentPoint[] = buildPoints()
 export const S_MIN = alignment[0].sKm
 export const S_MAX = alignment[alignment.length - 1].sKm
+/** Length of the drawn alignment in real world metres. */
+export const G_MAX = alignment[alignment.length - 1].gM
 
 /** Left-hand unit vector for a travel tangent (rotate +90° around Y). */
 export function leftOf(tan: Vector3): Vector3 {
@@ -69,6 +76,47 @@ function seg(sKm: number): { i: number; f: number } {
   return { i: lo, f }
 }
 
+/** Binary search the alignment for a geometric distance (m). */
+function segG(gM: number): { i: number; f: number } {
+  const g = Math.min(Math.max(gM, 0), G_MAX)
+  let lo = 0
+  let hi = alignment.length - 1
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1
+    if (alignment[mid].gM <= g) lo = mid
+    else hi = mid
+  }
+  const a = alignment[lo]
+  const b = alignment[hi]
+  const f = b.gM === a.gM ? 0 : (g - a.gM) / (b.gM - a.gM)
+  return { i: lo, f }
+}
+
+/** Chainage (km) -> distance along the drawn polyline (m). */
+export function gAt(sKm: number): number {
+  const { i, f } = seg(sKm)
+  return alignment[i].gM + (alignment[i + 1].gM - alignment[i].gM) * f
+}
+
+/** Distance along the drawn polyline (m) -> chainage (km). */
+export function sAtG(gM: number): number {
+  const { i, f } = segG(gM)
+  return alignment[i].sKm + (alignment[i + 1].sKm - alignment[i].sKm) * f
+}
+
+/**
+ * Step `metres` along the track from a chainage and return the chainage you
+ * land on. KMRL's shape_dist_traveled agrees with the projected geometry
+ * overall (28.79 km vs 28.40 km) but not segment by segment — locally it runs
+ * anywhere from 0.7x to 1.6x the true length. Adding metres/1000 to sKm would
+ * therefore space a trainset's cars (or the viaduct's spans) by whatever that
+ * stretch's error happens to be: authored 18.56 m cars came out 12.75 m apart.
+ * Anything with a real physical length must be laid out through here.
+ */
+export function offsetBy(sKm: number, metres: number): number {
+  return sAtG(gAt(sKm) + metres)
+}
+
 const _tmpA = new Vector3()
 const _tmpB = new Vector3()
 
@@ -81,7 +129,7 @@ export function poseAt(
   sKm: number,
   dir: 0 | 1,
   out: { pos: Vector3; heading: Vector3 },
-  trackOffsetM = 2.1,
+  trackOffsetM = TRACK_OFFSET_M,
 ): void {
   const { i, f } = seg(sKm)
   const a = alignment[i]

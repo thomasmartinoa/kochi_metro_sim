@@ -6,13 +6,13 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { TRAINSET } from '../data/trainset'
-import { poseAt } from '../sim/alignment'
+import { MODEL_CAR_PITCH_M } from '../data/trainset'
+import { offsetBy, poseAt } from '../sim/alignment'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
-import { Car } from './Trains'
+import { CarModel, useCarParts } from './MetroTrain'
 
-const CAR_LEN = TRAINSET.lengthM / TRAINSET.cars
+const CAR_LEN = MODEL_CAR_PITCH_M
 let keysBound = false
 
 export function DriveTrain() {
@@ -28,6 +28,7 @@ export function DriveTrain() {
   const tmp = useMemo(() => new THREE.Vector3(), [])
   const camGoal = useMemo(() => new THREE.Vector3(), [])
   const lookGoal = useMemo(() => new THREE.Vector3(), [])
+  const carParts = useCarParts()
 
   // keyboard controls (module flag prevents StrictMode double-binding)
   useEffect(() => {
@@ -81,7 +82,7 @@ export function DriveTrain() {
     for (let c = 0; c < 3; c++) {
       const car = group.current.children[c] as THREE.Group
       const offsetM = (1 - c) * CAR_LEN
-      const sCar = d.sKm + (d.dir === 0 ? offsetM : -offsetM) / 1000
+      const sCar = offsetBy(d.sKm, d.dir === 0 ? offsetM : -offsetM)
       poseAt(sCar, d.dir, pose)
       car.position.copy(pose.pos)
       tmp.copy(pose.pos).add(pose.heading)
@@ -90,7 +91,7 @@ export function DriveTrain() {
 
     // camera
     if (controls) {
-      poseAt(d.sKm + ((d.dir === 0 ? 1 : -1) * (CAR_LEN * 1.5 + 1)) / 1000, d.dir, pose)
+      poseAt(offsetBy(d.sKm, (d.dir === 0 ? 1 : -1) * (CAR_LEN * 1.5 + 1)), d.dir, pose)
       if (cam === 'cab') {
         // eye just ahead of the nose so the cab shell sits behind the camera
         camGoal.copy(pose.pos).addScaledVector(pose.heading, 2.6).setY(pose.pos.y + 3.1)
@@ -110,13 +111,13 @@ export function DriveTrain() {
   return (
     <group ref={group} visible={false}>
       <group>
-        <Car cabAt="front" />
+        <CarModel slot={0} parts={carParts} />
       </group>
       <group>
-        <Car cabAt={null} />
+        <CarModel slot={1} parts={carParts} />
       </group>
       <group>
-        <Car cabAt="back" />
+        <CarModel slot={2} parts={carParts} />
       </group>
     </group>
   )

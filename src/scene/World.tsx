@@ -186,13 +186,17 @@ export function World() {
         <SatGround />
       </Suspense>
       <TileGround />
-      <Line3D />
+      {/* the metro models stream in; without their own boundary a suspend here
+          would freeze the entire canvas rather than just the line */}
+      <Suspense fallback={null}>
+        <Line3D />
+        <Trains />
+        <DriveTrain />
+      </Suspense>
       <PinkLine />
-      <Trains />
       <Boats />
       <WaterTerminals />
       <WaterRouteLanes />
-      <DriveTrain />
       <ClockTick />
       <CameraRig />
       <KeyboardFly />

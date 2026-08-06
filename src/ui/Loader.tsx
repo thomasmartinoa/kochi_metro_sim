@@ -6,7 +6,7 @@
  * isn't visible on first paint).
  */
 import { useProgress } from '@react-three/drei'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSimStore } from '../state/useSimStore'
 import { firstLoad } from '../scene/firstLoad'
 import { tilesSettled } from '../scene/TileGround'
@@ -15,6 +15,8 @@ import { tilesSettled } from '../scene/TileGround'
  *  Generous because the landing panorama is wide (many tiles) and the camera is
  *  held still until they settle — the cap is only a dead-network guard. */
 const TILE_WAIT_MS = 14000
+/** Absolute ceiling: never hold the veil longer than this, whatever stalls. */
+const HARD_CAP_MS = 30000
 
 function TrainLoader() {
   return (
@@ -79,16 +81,27 @@ export function Loader() {
   const [done, setDone] = useState(false)
   const [gone, setGone] = useState(false)
 
+  // drei's progress is read through a ref, not the effect deps: geo-three keeps
+  // pushing tile textures through the default LoadingManager for as long as the
+  // camera moves, so `active`/`progress` never settle. Re-running the effect on
+  // each change would reset t0 every tick and neither timeout could ever fire.
+  const state = useRef({ active, progress })
+  state.current = { active, progress }
+
   // Hold the overlay until BOTH the GLB/textures (drei) and the first tile
   // batch are in — or the tile timeout elapses (offline/slow → fall back to
   // the static overlay). Polled because tilesSettled() isn't reactive.
   useEffect(() => {
-    if (done) return
     const t0 = performance.now()
     const id = setInterval(() => {
-      const glbReady = !active && progress >= 100
-      const groundReady = tilesSettled() || performance.now() - t0 > TILE_WAIT_MS
-      if (glbReady && groundReady) {
+      const waited = performance.now() - t0
+      // progress can come back non-finite once the manager's item count is out
+      // of step (the endless tile stream does exactly that); treat it as "done"
+      // rather than trapping the user behind the veil
+      const p = state.current.progress
+      const glbReady = !state.current.active && (p >= 100 || !Number.isFinite(p))
+      const groundReady = tilesSettled() || waited > TILE_WAIT_MS
+      if ((glbReady && groundReady) || waited > HARD_CAP_MS) {
         clearInterval(id)
         // release the landing camera drift and reveal in one go
         firstLoad.ready = true
@@ -97,13 +110,16 @@ export function Loader() {
       }
     }, 200)
     return () => clearInterval(id)
-  }, [active, progress, done])
+  }, [])
 
   const pinned = import.meta.env.DEV && window.location.search.includes('loader')
   if (gone && !pinned) return null
   const water = pinned
     ? window.location.search.includes('loader=water')
     : experience === 'water'
+  // guard the same non-finite progress the effect tolerates — "Infinity%" on the
+  // veil is worse than an honest 100
+  const shown = Number.isFinite(progress) ? Math.min(100, Math.round(progress)) : 100
   return (
     <div
       className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-ink transition-opacity duration-700 ${
@@ -122,11 +138,11 @@ export function Loader() {
       <div className="h-1 w-56 overflow-hidden rounded-full bg-panel">
         <div
           className="h-full rounded-full bg-kmrl transition-[width] duration-300"
-          style={{ width: `${Math.round(progress)}%` }}
+          style={{ width: `${shown}%` }}
         />
       </div>
       <div className="font-mono text-[11px] tabular-nums text-paper-dim">
-        {Math.round(progress)}% · loading the city
+        {shown}% · loading the city
       </div>
     </div>
   )
