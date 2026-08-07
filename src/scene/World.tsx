@@ -5,16 +5,17 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Component, Suspense, useEffect, type ReactNode } from 'react'
 import type * as THREE from 'three'
+import { WATER_METRO_ENABLED } from '../config'
 import { centerAt } from '../sim/alignment'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
-import { mat } from './materials'
 import { Atmosphere } from './Atmosphere'
 import { Boats } from './Boats'
 import { CameraController } from './CameraController'
 import { City, Palms } from './City'
 import { CityGLB } from './CityGLB'
 import { DriveTrain } from './DriveTrain'
+import { HorizonHaze } from './HorizonHaze'
 import { Line3D } from './Line3D'
 import { PinkLine } from './PinkLine'
 import { PostFX } from './PostFX'
@@ -103,13 +104,10 @@ export function World() {
       <fog attach="fog" args={['#BFDDE2', 1200, 11000]} />
       <Atmosphere />
 
-      {/* Fills the horizon beyond the aerial sheet's ~31 km extent. Kept far
-          below it so it can never win the depth test and sheet over the city,
-          and painted the fog colour (see mat.horizon) so its edge dissolves
-          into haze rather than drawing a line across the horizon. */}
-      <mesh material={mat.horizon} rotation={[-Math.PI / 2, 0, 0]} position={[0, -120, 0]}>
-        <planeGeometry args={[60000, 60000]} />
-      </mesh>
+      {/* Fills everything past the aerial sheet's ~31 km extent, ramping from
+          fog colour to sky colour so the ground dissolves into the horizon
+          instead of ending on a line. */}
+      <HorizonHaze />
 
       <CityBoundary>
         <Suspense fallback={<City />}>
@@ -128,10 +126,18 @@ export function World() {
         <Trains />
         <DriveTrain />
       </Suspense>
-      <PinkLine />
-      <Boats />
-      <WaterTerminals />
-      <WaterRouteLanes />
+      {/* Water Metro stays off the map entirely until it ships — routes,
+          terminals and boats alike. It is built on the `water` branch, where
+          VITE_WATER_METRO=true turns all of this back on. The Pink Line goes
+          with it: nothing unbuilt should be visible to visitors. */}
+      {WATER_METRO_ENABLED && (
+        <>
+          <PinkLine />
+          <Boats />
+          <WaterTerminals />
+          <WaterRouteLanes />
+        </>
+      )}
       <ClockTick />
       <CameraController />
       <DevCam />

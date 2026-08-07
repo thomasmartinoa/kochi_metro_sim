@@ -43,13 +43,6 @@ export const mat = {
   markerDown: new THREE.MeshBasicMaterial({ color: COLORS.accentLemon }),
   markerRing: new THREE.MeshBasicMaterial({ color: '#0A1620' }),
   ground: new THREE.MeshStandardMaterial({ color: '#5E7A68', roughness: 1 }),
-  /**
-   * The backdrop past the aerial sheet's edge. Unlit and fog-free on purpose:
-   * Atmosphere paints it the current fog colour, so the ground simply dissolves
-   * into haze at the map's edge instead of stepping onto a lit green plane —
-   * that step was the hard line across the horizon.
-   */
-  horizon: new THREE.MeshBasicMaterial({ color: '#BFDDE2', fog: false }),
   water: new THREE.MeshStandardMaterial({
     color: COLORS.water,
     roughness: 0.15,

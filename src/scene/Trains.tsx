@@ -16,8 +16,12 @@ const POOL = 26
 const CAR_LEN = MODEL_CAR_PITCH_M
 /** radius the marker geometry is authored at, in world units */
 const MARKER_RADIUS = 4.2
-/** how much of the viewport's height the marker disc should span, at any zoom */
-const MARKER_SCREEN_FRAC = 0.022
+/**
+ * Marker radius as a fraction of viewport height, held constant at any zoom.
+ * 0.011 puts it around 14 px on a 1440-tall window — a comfortable click target
+ * that reads as a pin rather than a disc parked over the train.
+ */
+const MARKER_SCREEN_FRAC = 0.011
 
 function TrainModel({ parts }: { parts: Part[][] }) {
   return (

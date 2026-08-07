@@ -14,6 +14,7 @@ import { cityEmissives } from './CityGLB'
 import { groundDim } from './TileGround'
 import { mat } from './materials'
 import { updateSkyEnv } from './metroMaterials'
+import { animateWater } from './waterLook'
 
 interface Key {
   h: number
@@ -65,7 +66,7 @@ export function Atmosphere() {
   )
   const sunDir = useMemo(() => new THREE.Vector3(), [])
 
-  useFrame(() => {
+  useFrame((state) => {
     const { daySec } = istDayTime(useSimStore.getState().epochMs)
     const h = daySec / 3600
     let i = 0
@@ -122,8 +123,8 @@ export function Atmosphere() {
     // unlit streamed satellite tiles follow the scene's light level
     groundDim.value = THREE.MathUtils.clamp(0.08 + hemiI * 0.58 + sunI * 0.22, 0.16, 1)
 
-    // the backdrop past the map's edge is the haze, so it wears the fog colour
-    mat.horizon.color.copy(cols.fog)
+    // drift the backwater ripples (HorizonHaze reads fog/background itself)
+    animateWater(state.clock.elapsedTime)
 
     // metal on the authored metro models needs a sky to reflect, and so does
     // water — a broad sky reflection is most of what makes it read as water

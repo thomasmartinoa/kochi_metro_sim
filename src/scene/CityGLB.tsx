@@ -14,6 +14,7 @@ import { useEffect } from 'react'
 import * as THREE from 'three'
 import { project } from '../sim/projection'
 import { lightWithSky } from './metroMaterials'
+import { applyWaterLook } from './waterLook'
 
 const CITY_URL = '/models/kochi-city-v2.glb?v=5'
 /** Blosm geo origin of the map_7 scene this GLB was exported from. */
@@ -63,19 +64,27 @@ export function CityGLB() {
           cityEmissives.push(m)
         }
         if (m.name === 'KochiWater') {
-          // Authored as a near-mirror (roughness 0.12), which turns each
-          // directional light into one hard white blob sitting on an otherwise
-          // flat navy sheet — the least water-like thing a surface can do.
-          // Real backwater is choppy and mostly shows a broad sky sheen, so:
-          // roughen it until the highlight spreads out, and let it go partly
-          // transparent so the satellite imagery underneath supplies the real
-          // colour and shoreline detail instead of a painted-on slab.
-          m.roughness = 0.42
-          m.metalness = 0.02
+          // The surface arrives as a near-mirror (roughness 0.12) with nothing
+          // to break it up, so each light landed as one hard blob and the mesh's
+          // own triangulation showed as patches of tone across the bay.
+          // applyWaterLook flattens the normals and hands it a drifting ripple
+          // field, which is what scatters the sun into a glitter path; the tint
+          // stays light so the imagery underneath keeps supplying the real
+          // colour and shoreline instead of a painted-on slab.
+          m.roughness = 0.28
+          m.metalness = 0.0
           m.transparent = true
-          m.opacity = 0.78
+          m.opacity = 0.55
           m.depthWrite = true
-          lightWithSky(m, 0.6) // a broad sky sheen, not a mirror
+          lightWithSky(m, 0.45) // a broad sky sheen, not a mirror
+          if (!o.geometry.boundingBox) o.geometry.computeBoundingBox()
+          const bb = o.geometry.boundingBox!
+          applyWaterLook(
+            m,
+            o.geometry,
+            Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z),
+            Math.min(8, maxAniso),
+          )
           cityWater.push(m)
         }
       }

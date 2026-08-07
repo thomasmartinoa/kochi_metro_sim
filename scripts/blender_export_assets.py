@@ -131,15 +131,8 @@ def bake_transmission_to_alpha():
         mbuf = [0.0] * (w * h * 4)
         mask_img.pixels.foreach_get(mbuf)
         for i in range(w * h):
-            k = mbuf[i * 4]
-            # Reproduce the author's Mix: the baked map carries the teal ribs,
-            # and the glass panels are lifted to white. Without this the panels
-            # keep whatever the bake left behind — near black — and the roof
-            # reads as a dark slab instead of glazing between teal ribs.
-            for ch in range(3):
-                buf[i * 4 + ch] += (1.0 - buf[i * 4 + ch]) * k
             # mask 1 = glass -> alpha 1 - transparency; mask 0 = solid -> alpha 1
-            buf[i * 4 + 3] = 1.0 - ROOF_GLASS_TRANSPARENCY * k
+            buf[i * 4 + 3] = 1.0 - ROOF_GLASS_TRANSPARENCY * mbuf[i * 4]
         combined.pixels.foreach_set(buf)
         combined.pack()
 
