@@ -26,6 +26,9 @@ from mathutils import Matrix, Vector
 
 argv = sys.argv[sys.argv.index('--') + 1:]
 LIB, OUT_DIR = argv[0], argv[1]
+# optional third arg: a .blend holding a replacement Roof_Arch_Baked, baked down
+# to one material (see swap_in_baked_roof)
+ROOF_LIB = argv[2] if len(argv) > 2 else None
 
 # ---- measured from the authored sample scene (see docs/ART-GUIDE.md) --------
 RAIL_TOP = 14.833   # rail running surface above ground
@@ -47,6 +50,73 @@ for c in loaded.values():
 # this the first bbox read comes back in local space (identity matrices).
 bpy.context.view_layer.update()
 print('loaded collections:', sorted(loaded))
+
+
+def swap_in_baked_roof(path):
+    """Replace the station's roof with a single-material baked version.
+
+    The roof is authored in its own file (via_duck_kochi.blend) across four
+    materials — teal frame, procedural window-grid glass, solar panels, metal
+    sheet — and baked down there to one texture set. That file places the
+    station at a different scene origin, so rather than trusting a hard-coded
+    offset the replacement is aligned by bounding-box centre. It is the same
+    2494-poly mesh, so that lands it exactly where the old roof was and keeps
+    working if either file is moved later.
+    """
+    viaduct = loaded.get('ViaDuct')
+    if not viaduct:
+        print('  ! no ViaDuct collection; roof override skipped')
+        return
+    old = next((o for o in viaduct.all_objects
+                if o.type == 'MESH' and o.name.startswith('Roof_Arch')), None)
+    if not old:
+        print('  ! no Roof_Arch in ViaDuct; roof override skipped')
+        return
+
+    with bpy.data.libraries.load(path, link=False) as (src, dst):
+        dst.objects = [n for n in src.objects if n == 'Roof_Arch_Baked']
+    new = next((o for o in dst.objects if o), None)
+    if not new:
+        print('  ! Roof_Arch_Baked not found in %s' % path)
+        return
+    viaduct.objects.link(new)
+    bpy.context.view_layer.update()
+
+    def centre(o):
+        pts = [o.matrix_world @ Vector(c) for c in o.bound_box]
+        return sum(pts, Vector()) / len(pts)
+
+    delta = centre(old) - centre(new)
+    new.matrix_world = Matrix.Translation(delta) @ new.matrix_world
+    bpy.context.view_layer.update()
+    print('  roof override: %d polys, moved (%.3f, %.3f, %.3f) onto the old roof'
+          % (len(new.data.polygons), delta.x, delta.y, delta.z))
+
+    old_name = old.name
+    old_mats = [s.material for s in old.material_slots if s.material]
+    old_mesh = old.data
+    bpy.data.objects.remove(old, do_unlink=True)
+    if old_mesh.users == 0:
+        bpy.data.meshes.remove(old_mesh)
+    new.name = old_name
+
+    # Appending suffixed the new material to Roof_Arch_Baked_Mat.001, and that
+    # no longer matches the app's `*_Baked_Mat` rule for baked surfaces — it
+    # would be lit as live PBR instead. Push the superseded material's name
+    # aside (deleting is unreliable: an orphaned mesh can still hold a
+    # reference), then the new one can take the name it needs.
+    for m in old_mats:
+        m.name = m.name + '_superseded'
+    for m in [s.material for s in new.material_slots if s.material]:
+        base = m.name.rsplit('.', 1)[0]
+        if base != m.name and not bpy.data.materials.get(base):
+            m.name = base
+        print('  roof material: %s' % m.name)
+
+
+if ROOF_LIB:
+    print('roof override from', os.path.basename(ROOF_LIB))
+    swap_in_baked_roof(ROOF_LIB)
 
 gn = [o.name for c in loaded.values() for o in c.all_objects if any(m.type == 'NODES' for m in o.modifiers)]
 print(f'objects with geometry nodes (baked by export_apply): {len(gn)}')

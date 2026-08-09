@@ -18,12 +18,16 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-const [libArg, blenderArg] = process.argv.slice(2)
+const [libArg, roofArg, blenderArg] = process.argv.slice(2)
 if (!libArg) {
-  console.error('usage: node scripts/build-metro-assets.mjs <metro_models.blend> [blenderExe]')
+  console.error(
+    'usage: node scripts/build-metro-assets.mjs <metro_models.blend> [roof_baked.blend] [blenderExe]',
+  )
   process.exit(1)
 }
 const LIB = resolve(libArg)
+/** optional: a .blend whose Roof_Arch_Baked replaces the station's roof */
+const ROOF = roofArg ? resolve(roofArg) : null
 
 const BLENDER_CANDIDATES = [
   blenderArg,
@@ -53,7 +57,7 @@ const mb = (p) => (statSync(p).size / 1048576).toFixed(2)
 // ---------------------------------------------------------------- 1. Blender
 console.log('\n=== blender export ===')
 run(BLENDER, ['-b', '--factory-startup', '-P', join(ROOT, 'scripts/blender_export_assets.py'),
-  '--', LIB, raw])
+  '--', LIB, raw, ...(ROOF ? [ROOF] : [])])
 
 const CARS = ['metro-car0', 'metro-car1', 'metro-car2']
 /** `-ext` is the same car without its cab interior; it is what the LOD is built from */
