@@ -51,6 +51,54 @@ print('loaded collections:', sorted(loaded))
 gn = [o.name for c in loaded.values() for o in c.all_objects if any(m.type == 'NODES' for m in o.modifiers)]
 print(f'objects with geometry nodes (baked by export_apply): {len(gn)}')
 
+
+def report_flipped_faces():
+    """Warn about meshes whose face winding is inconsistent.
+
+    A face pointing the wrong way still draws — the materials are double-sided —
+    but it is lit by a normal aimed away from the light, so it comes out dark and
+    dead against its neighbours. That is what made the station roof and parts of
+    the trainset look wrong long before any of the material work mattered.
+
+    This only reports. Recalculating outward is a guess on open shells like the
+    roof arch, and the author's own orientation is the authority — but a silent
+    build hides the problem until it shows up on the site, so name them here.
+    """
+    import bmesh
+    bad = []
+    seen_names = set()
+    for c in loaded.values():
+        for o in c.all_objects:
+            if o.type != 'MESH' or not o.data.polygons or o.name in seen_names:
+                continue
+            seen_names.add(o.name)
+            bm = bmesh.new()
+            try:
+                bm.from_mesh(o.data)
+                # "Outward" only means anything on a closed surface. On a flat
+                # panel or an open shell — a display screen, the roof arch —
+                # recalc picks a side arbitrarily, so comparing against it would
+                # report every such mesh as broken. Only judge closed manifolds.
+                if any(len(e.link_faces) != 2 for e in bm.edges):
+                    continue
+                before = [f.normal.copy() for f in bm.faces]
+                bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+                flipped = sum(1 for f, n in zip(bm.faces, before) if f.normal.dot(n) < 0)
+            finally:
+                bm.free()
+            if flipped:
+                bad.append((o.name, flipped, len(o.data.polygons)))
+    if not bad:
+        print('face winding: consistent on every closed mesh')
+        return
+    bad.sort(key=lambda r: -r[1] / r[2])
+    print('face winding: %d closed mesh(es) have faces pointing inward —' % len(bad))
+    for name, flipped, total in bad[:15]:
+        print('  %-38s %6d / %-6d faces (%.0f%%)' % (name, flipped, total, 100 * flipped / total))
+
+
+report_flipped_faces()
+
 # A couple of the baked maps are 32-bit float, which Blender writes as 16-bit
 # PNG — sharp/libvips inside `gltf-transform optimize` rejects those
 # ("colourspace: parameter space not set"). Re-save them as 8-bit in place so
