@@ -22,8 +22,8 @@ import { SPAN_PITCH_M } from '../data/trainset'
 import { useSimStore } from '../state/useSimStore'
 import { prepareMetroMaterial } from './metroMaterials'
 
-const SPAN_URL = '/models/metro-span.glb?v=8'
-const STATION_URL = '/models/metro-station.glb?v=8'
+const SPAN_URL = '/models/metro-span.glb?v=9'
+const STATION_URL = '/models/metro-station.glb?v=9'
 /** spans per instanced chunk — small enough to cull, large enough to stay cheap */
 const SPANS_PER_CHUNK = 24
 
