@@ -239,6 +239,19 @@ export function applyWaterLook(
   // material still has to be in the transparent pass for it to blend at all
   material.transparent = true
   material.depthWrite = true
+  /**
+   * The bay arrives from OSM as overlapping polygons rather than one union:
+   * sampling it, roughly 40% of the water is covered **twice**, two coplanar
+   * sheets sitting at exactly y = 0. Blended twice, those regions came out a
+   * visibly different tone with hard polygon edges running across open water,
+   * and the two sheets z-fought as the camera moved.
+   *
+   * LessDepth instead of the default LessEqualDepth is what sorts it out: the
+   * first sheet writes its depth and the second, arriving at exactly equal
+   * depth, fails the test and is dropped. Every pixel of water is then shaded
+   * exactly once, whatever the source polygons do.
+   */
+  material.depthFunc = THREE.LessDepth
 
   const w: Water = {
     material,
