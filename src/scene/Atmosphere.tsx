@@ -38,6 +38,18 @@ const KEYS: Key[] = [
   { h: 24, sky: '#0B1A2B', fog: '#0B1A2B', sun: 0.04, hemi: 0.34, sunColor: '#7C90B8' },
 ]
 
+/**
+ * The scene used to carry a second directional light opposite the sun, to fill
+ * the shadowed side of things. A directional light also puts a specular
+ * highlight on every glossy surface, so on the backwaters it drew a **second
+ * sun glitter path** — a bright streak with no sun above it. There is one sun.
+ *
+ * That fill is folded into the hemisphere light instead: it lights from sky and
+ * ground the same way, but contributes only irradiance, so it adds no highlight
+ * of its own. This factor is what the removed light used to be worth.
+ */
+const HEMI_FILL = 1.28
+
 interface SkyUniforms {
   sunPosition: { value: THREE.Vector3 }
   turbidity: { value: number }
@@ -50,7 +62,6 @@ export function Atmosphere() {
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
   const sunRef = useRef<THREE.DirectionalLight>(null)
-  const fillRef = useRef<THREE.DirectionalLight>(null)
   const hemiRef = useRef<THREE.HemisphereLight>(null)
   const skyRef = useRef<THREE.Mesh<THREE.BoxGeometry, THREE.ShaderMaterial>>(null)
 
@@ -114,11 +125,7 @@ export function Atmosphere() {
       sunRef.current.intensity = sunI
       sunRef.current.color.copy(cols.sun)
     }
-    if (hemiRef.current) hemiRef.current.intensity = hemiI
-    // The fill light used to hold a fixed 0.4 all night, and the backwaters are
-    // glossy enough to turn it into a bright specular blob floating on dark
-    // water hours after sunset. Fade it with the sun like everything else.
-    if (fillRef.current) fillRef.current.intensity = 0.06 + sunI * 0.21
+    if (hemiRef.current) hemiRef.current.intensity = hemiI * HEMI_FILL
 
     // unlit streamed satellite tiles follow the scene's light level
     groundDim.value = THREE.MathUtils.clamp(0.08 + hemiI * 0.58 + sunI * 0.22, 0.16, 1)
@@ -152,9 +159,10 @@ export function Atmosphere() {
         mieCoefficient={0.005}
         mieDirectionalG={0.82}
       />
+      {/* Sky and ground bounce. This carries all the fill now — see HEMI_FILL. */}
       <hemisphereLight ref={hemiRef} args={['#DFF3F0', '#5C6B58', 1.1]} />
+      {/* The one and only sun. */}
       <directionalLight ref={sunRef} position={[4000, 6000, -2500]} intensity={1.6} color="#FFF4DC" />
-      <directionalLight ref={fillRef} position={[-3500, 2600, 4000]} intensity={0.4} color="#DCEFF5" />
     </>
   )
 }
