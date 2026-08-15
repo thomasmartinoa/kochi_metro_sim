@@ -30,14 +30,21 @@
  *     rough metal returns only a fraction of what it receives.
  */
 import * as THREE from 'three'
+import { COLORS } from '../data/trainset'
 
 /** equirect gradient size — PMREM derives its cube size from width/4 */
 const W = 64
 const H = 32
 /** regenerate once the sky radiance has drifted this far in any channel */
 const COLOR_EPS = 0.05
-/** how much brighter true daylight is than the palette's display colours */
-const RADIANCE = (sunI: number) => 0.35 + sunI * 1.5
+/**
+ * How much brighter true daylight is than the palette's display colours.
+ * Deliberately modest: the scene already carries its ambient in the hemisphere
+ * light, and the metro assets are the only things that also get this sky as an
+ * environment. Push it and they get lit roughly twice while the city around
+ * them gets lit once, which is exactly how the metro ended up glowing.
+ */
+const RADIANCE = (sunI: number) => 0.25 + sunI * 0.9
 
 /**
  * Per-glass opacity, by the material names the Blender scene actually uses.
@@ -50,17 +57,63 @@ const RADIANCE = (sunI: number) => 0.35 + sunI * 1.5
 const GLASS_OPACITY: { test: RegExp; opacity: number }[] = [
   { test: /^Glass_bogy$/i, opacity: 0.9 }, // saloon windows — hide the empty shell
   { test: /^(Glass|M_Cockpit_glass|M_Headlight_glass)$/i, opacity: 0.5 }, // cab + door glazing
-  { test: /glass/i, opacity: 0.72 }, // station grid panels and anything else
+  { test: /glass/i, opacity: 0.72 }, // any other trainset glazing
 ]
-/** baked textures already contain their diffuse lighting — a light touch of sky */
-const BAKED_ENV = 0.4
+
 /**
- * >1 on purpose. The trainset's bodywork is authored at metalness ~1, and a
- * fully rough metal returns only a fraction of what it receives, so it needs
- * markedly more sky than the baked assets before it reads as the sunlit white
- * it should be. Tuned against the viaduct beside it.
+ * The station's glazed bays. Everything else baked is solid architecture.
+ *
+ * Its texture is `Glass_Grid_Panel_Transmission_2K` — a **mask**, not a colour
+ * map: white where a bay is glazed, black on the mullions between them and on
+ * the surrounding cladding. The exporter wired that one image into both base
+ * colour and KHR_materials_transmission, which is why it doubles as the panel
+ * artwork. Applying a single blanket opacity to the material threw the mask
+ * away and made the entire wall see-through, so a trainset at the platform
+ * showed through the cladding, windows and all. APPLY_PANE_ALPHA reads the mask
+ * back and lets only the panes go translucent.
  */
-const PBR_ENV = 1.7
+const STATION_GLAZING = /^Glass_Grid_Panel/i
+/** how see-through a glazed pane is; mullions and cladding stay fully opaque */
+const PANE_ALPHA = 0.55
+/** baked textures already contain their diffuse lighting — a light touch of sky */
+const BAKED_ENV = 0.12
+/**
+ * The sky is here so metal has something to reflect, not as a second helping of
+ * ambient. envMapIntensity scales diffuse irradiance as well as specular, and
+ * the metro assets are the only things in the scene carrying an environment at
+ * all — the city makes do with the hemisphere light. Anything much above this
+ * lights the metro roughly twice over and it reads as lit from inside.
+ */
+const PBR_ENV = 0.4
+
+/**
+ * The coach bodywork and roof.
+ *
+ * "Bogie" here is Indian English for the carriage, not the running gear — the
+ * saloon windows are `Glass_bogy` and this geometry spans the full 0.2-4.0 m
+ * height of the car. The author gave these panels **metalness 0.9 over a dark
+ * grey base**, i.e. polished dark metal, which has almost no diffuse: nearly
+ * everything you see on them is reflected environment. That is why the trainset
+ * came out charcoal under an ordinary sky, and why PBR_ENV had previously been
+ * pushed to 1.7 to force it back to white — at which point the body is a mirror
+ * returning ~4x the sky and reads as a glowing slab with no shading at all.
+ *
+ * A real Metropolis body is painted metal, so it is treated as one here: a
+ * dielectric in the KMRL body white. It then shades like every other surface in
+ * the scene — bright where the sun lands, darker on the shadowed flank — and
+ * needs no exaggerated environment to look right.
+ */
+const BODY_SIDES = /^M_Bogiemetal$/i
+const BODY_ROOF = /^M_Bogiemetal_top$/i
+/**
+ * The livery white, held back off the palette value. `COLORS.trainBody` is the
+ * colour of the paint in a swatch; under an open midday sky a surface that pale
+ * sits at the top of the range with nowhere left to go, and the trainset reads
+ * as a light source rather than a white thing being lit. Dimming the albedo
+ * keeps the highlights on the roof and window surrounds while letting the
+ * flanks fall back to a believable grey.
+ */
+const BODY_DIM = 0.72
 
 const materials = new Set<THREE.MeshStandardMaterial>()
 const lastSky = new THREE.Color(-1, -1, -1)
@@ -73,6 +126,27 @@ let target: THREE.WebGLRenderTarget | null = null
 const _sky = new THREE.Color()
 const _ground = new THREE.Color()
 const _row = new THREE.Color()
+
+/** Drive alpha from the glazing mask instead of a single blanket opacity. */
+function applyPaneAlpha(m: THREE.MeshStandardMaterial): void {
+  m.transparent = true
+  m.opacity = 1
+  // the mullions come out of the mask fully opaque, so this writes depth like
+  // any solid surface and the panes stop being a free window into the platform
+  m.depthWrite = true
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uPaneAlpha = { value: PANE_ALPHA }
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uPaneAlpha;')
+      .replace(
+        '#include <alphamap_fragment>',
+        `#include <alphamap_fragment>
+        // white in the mask = glazed bay, black = mullion or solid cladding
+        diffuseColor.a = mix( 1.0, uPaneAlpha, texture2D( map, vMapUv ).g );`,
+      )
+  }
+  m.customProgramCacheKey = () => 'kochi-station-glazing'
+}
 
 /**
  * Light a material with the sky environment at the given strength. Idempotent.
@@ -111,12 +185,41 @@ export function prepareMetroMaterial(material: THREE.Material): void {
   // colour entirely. Glazing is done as plain translucency instead.
   if (phys.transmission > 0) phys.transmission = 0
 
-  if (glass) {
+  // painted bodywork, not polished metal — see BODY_SIDES
+  if (BODY_SIDES.test(m.name)) {
+    m.color.set(COLORS.trainBody).multiplyScalar(BODY_DIM)
+    m.metalness = 0.1
+    m.roughness = 0.42
+  } else if (BODY_ROOF.test(m.name)) {
+    // roofs carry equipment and weather; a shade off the flank's white
+    m.color.set('#CDD5D7').multiplyScalar(BODY_DIM)
+    m.metalness = 0.15
+    m.roughness = 0.55
+  }
+
+  if (isBaked) {
+    // Station and viaduct. Only the glazed bays see through; the rest is
+    // architecture and belongs in the opaque pass.
+    if (STATION_GLAZING.test(m.name)) {
+      applyPaneAlpha(m)
+    } else {
+      // The exporter marked the roof arch alphaMode BLEND, but the alpha in its
+      // texture never drops below 0.89 — there is nothing there to see through.
+      // All it bought was a place in the transparent pass, where it sorted
+      // against the glazing by object centre rather than by depth and punched
+      // rib-shaped holes clean through the roof, flickering as the camera moved.
+      m.transparent = false
+      m.opacity = 1
+      m.depthWrite = true
+    }
+  } else if (glass) {
     m.transparent = true
     m.opacity = glass.opacity
-    // panels are double-sided, so two layers stack; skipping depth writes stops
-    // them occluding each other, but only where enough light gets through to
-    // notice — a near-opaque pane is better off sorting normally
+    // A pane dense enough to hide what is behind it has to write depth, or the
+    // geometry behind it keeps drawing over it and the transparent meshes are
+    // left sorting against each other by object centre — an order that flips as
+    // the camera moves. Only genuinely see-through glazing (the cab, where
+    // there is a modelled cab to look into) skips the depth write.
     m.depthWrite = glass.opacity >= 0.85
   }
 

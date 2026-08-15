@@ -67,16 +67,16 @@ export function CityGLB() {
           // The surface arrives as a near-mirror (roughness 0.12) with nothing
           // to break it up, so each light landed as one hard blob and the mesh's
           // own triangulation showed as patches of tone across the bay.
-          // applyWaterLook flattens the normals and hands it a drifting ripple
-          // field, which is what scatters the sun into a glitter path; the tint
-          // stays light so the imagery underneath keeps supplying the real
-          // colour and shoreline instead of a painted-on slab.
-          m.roughness = 0.28
+          // applyWaterLook flattens the normals and puts the authored wave
+          // normal map back at a scale that survives mipmapping, which is what
+          // scatters the sun into a glitter path; it also owns transparency,
+          // because alpha is a per-pixel fresnel term rather than a constant.
+          // The tint stays light so the imagery underneath keeps supplying the
+          // real colour and shoreline instead of a painted-on slab.
+          m.roughness = 0.18
           m.metalness = 0.0
-          m.transparent = true
-          m.opacity = 0.55
-          m.depthWrite = true
-          lightWithSky(m, 0.45) // a broad sky sheen, not a mirror
+          // a broad sky reflection is most of what makes water read as water
+          lightWithSky(m, 0.75)
           if (!o.geometry.boundingBox) o.geometry.computeBoundingBox()
           const bb = o.geometry.boundingBox!
           applyWaterLook(
