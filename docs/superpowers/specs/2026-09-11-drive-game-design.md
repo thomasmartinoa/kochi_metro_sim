@@ -14,13 +14,24 @@ keyboard on a desktop and with touch on a phone.
 Decided with the user: derailment is **physics-based** (rigid-body cars that
 leave the rails and tumble), not a scripted animation.
 
-## 2 · Non-goals
+## 2 · Scope decisions
 
-- Collisions with scheduled trains. While driving, same-direction service is
-  hidden and opposing trains run on the other rail; they never interact.
-- Signalling, speed restrictions other than curves and the terminal buffer,
-  weather, passenger boarding simulation, multiplayer.
-- Any change to Tracker or Explore. The timetable engine is untouched.
+Revised after the user's review: signalling, collisions with scheduled
+trains, weather and passenger boarding are **in**. Speed limits exist and are
+shown, but are never enforced by the game — the driver chooses whether to
+obey them and lives with the consequences (score, passengers, the physics).
+The one auto-brake today (`penaltyBrake` latching at 85 km/h) is removed.
+
+**Multiplayer** is the one thing that cannot ship in this pass. The app is
+fully client-side and static-hosted with no backend (CLAUDE.md), and real
+multiplayer needs one — a relay for positions at minimum. What this pass can
+do without a server: an **asynchronous ghost** (your own best run replayed
+beside you, saved in localStorage) and a local leaderboard. True multiplayer
+is a separate project once a backend exists; it is designed for here only in
+that the drive state is already serialisable per tick.
+
+Still out: passenger boarding as animated people (it is simulated as counts,
+timing and sound), and any change to Tracker or Explore.
 
 ## 3 · Architecture
 
@@ -87,7 +98,10 @@ curvature from `alignment.curvatureAtG` at the leading car.
 curves (≈100 m radius) that is 58 km/h; on a 300 m curve it is above the
 80 km/h line limit, so only genuinely tight bends bite — which is realistic.
 The HUD shows the limit of the tightest curve in the next 400 m and its
-distance, so a driver who looks ahead can brake for it.
+distance, and **speed boards** stand beside the track ahead of each
+restriction, so a driver who looks ahead can brake for it. Nothing brakes
+for them: limits are advisory, the physics and the score are the judge.
+The existing penalty brake (forced notch −3 above 85 km/h) is removed.
 
 `DriveState` gains `phase: 'derailed'` and a `derail` record: chainage,
 speed, the limit it broke, the curve radius, the last station passed, and
@@ -144,11 +158,15 @@ once phase 6e lands; until then the default is cab.
 
 The cab the user has modelled in Blender (two displays, gauges, master
 controller lever, E-stop, button clusters, seat) is exported to
-`metro-cockpit.glb` and mounted as a child of the leading car, drawn only in
-cockpit view. Blocked on reading the scene through Blender MCP: the lever's
-object name and hinge origin, and the names of the E-stop, door and horn
-buttons and the two screens. The export script's collection selection
-(`mesh_objs('cockpit')`) is fixed against the real scene at the same time.
+`metro-cockpit.glb` — hierarchy preserved, not flattened, so pivots survive —
+and mounted as a child of the leading car, drawn only in cockpit view. Read
+through Blender MCP: the lever is `Cockpit_Component_026` (origin at the
+hinge, swings about local X); screens are `Cockpit_Display_Screen_001/003/
+004/005` (materials `M_Cockpit_screen1/2/3_small`); buttons are
+`Cockpit_Control_Button_001..015`; the E-stop and horn are identified by
+position at export. The shipped GLB is stale (9 of 106 objects). The cab is
+placed by calibrating its driver's seat onto the seat already inside the
+leading car model, so it lands exactly where the car's own cab interior is.
 
 - **Screens** are `CanvasTexture`s redrawn at 10 Hz: left — speedometer,
   notch, next stop and distance, doors; right — curve-limit lookahead,
@@ -189,6 +207,69 @@ notch), and doors / horn / camera / E-stop buttons along the bottom. The desk
 HUD collapses to speed, notch and next stop. Landscape is recommended with a
 one-time hint, not enforced.
 
+### 3.9 · Signalling and the train ahead
+
+Same-direction scheduled trains stay on the player's track (the current
+hiding is reverted for drive mode). The line is divided into fixed blocks
+(one per inter-station gap, split at 300 m from each platform). A signal
+stands at the entry to each block, on a mast beside the track, and shows:
+
+| aspect | meaning |
+|---|---|
+| green | next two blocks clear |
+| yellow | next block clear, the one after occupied — expect a red |
+| red | next block occupied — stop |
+
+Aspects come from the timetable engine (which trains occupy which block at
+this instant) plus the player's own position, so they are deterministic.
+Passing a red is scored (−300, "SPAD") and shown on the cab screen; it is
+not prevented. The signal ahead and its distance are on the HUD and cockpit
+screen.
+
+### 3.10 · Collisions
+
+If the player closes on the train ahead, the scheduled trainset becomes a
+kinematic Rapier collider for the duration (its motion still comes from the
+timetable). Contact above 10 km/h relative is a **collision**: the player's
+cars go dynamic as in a derailment, with impulse along the track, and the
+struck train's rear car is knocked dynamic too; crash FX and the crash panel
+follow ("Collided with WK_48 at 34 km/h · passed a red at Kaloor"). Below
+10 km/h it is a bump: score −100, cars stay on the rails. The buffer stop at
+each terminal is the same rule at any speed above 15 km/h.
+
+### 3.11 · Weather
+
+A weather state on the sim store — clear, overcast, rain, heavy monsoon,
+fog — chosen on the drive start screen (default: clear) with a "random"
+option. Presentation: rain particles in a volume around the camera, a wet
+sheen on the viaduct deck and bodywork (roughness down, a reflection
+darkening), fog density on the scene fog, dimmer sun. **Adhesion** is the
+gameplay hook: braking and acceleration are scaled by a rail-adhesion factor
+(clear 1.0, rain 0.75, monsoon 0.6), so braking distances stretch and the
+HUD's brake point moves out. Wheel-slip on hard braking in the wet shows as
+a slide (speed holds while the notch is on emergency) and a warning.
+
+### 3.12 · Passenger boarding
+
+At each platform the train has a load (from the engine's occupancy
+heuristic) and the platform has a waiting count (from the same heuristic
+and the time since the last train). With doors open, passengers alight then
+board at a rate per door; the cab screen shows the count and a boarding
+bar, and a chime plays when boarding finishes. Closing the doors early
+strands the rest (−20 each) and the dwell is scored short; holding the doors
+long after boarding is scored late. The train's load affects acceleration
+slightly (heavier = slower), so a full train brakes later. No animated
+people in this pass.
+
+### 3.13 · Ghost and leaderboard (in place of multiplayer)
+
+Every completed or crashed run is serialised (the replay buffer already has
+the transforms) and the best run per direction is kept in localStorage. On
+the next run the ghost trainset plays it back alongside — semi-transparent,
+on the same rail, never colliding — so you race yourself. A local
+leaderboard of the last 20 runs (score, grade, stops, punctuality) shows on
+the start screen.
+
 ## 4 · Data flow
 
 ```
@@ -211,14 +292,23 @@ src/sim/drive.ts  stepDrive(state, dt, curvatureAtG) → DriveState
 
 | # | phase | depends on |
 |---|---|---|
-| 6a | derail rule in `drive.ts` (tests), Rapier world, kinematic→dynamic switch, deck colliders, crash FX, crash panel, restart from station | — |
+| 6a | derail rule in `drive.ts` (tests), penalty brake removed, speed boards, Rapier world, kinematic→dynamic switch, deck colliders, crash FX, crash panel, restart from station | — |
 | 6b | camera rig: `driveCameras.ts` (tests), `DriveCamera`, all views, keys + strip | — |
 | 6c | replay buffer (tests), ghost trainset, replay bar and cameras | 6a |
-| 6d | doors / horn / lights, comfort + punctuality scoring, results panel | — |
-| 6e | cockpit: export, mount, screens, lever, buttons | Blender MCP |
-| 6f | touch controls, phone HUD, landscape hint | 6b, 6d |
+| 6d | doors / horn / lights, boarding, comfort + punctuality scoring, results panel | — |
+| 6e | signalling (tests), same-direction trains back, collisions with the train ahead and the buffer | 6a |
+| 6f | weather: state, presentation, adhesion (tests) | 6a |
+| 6g | cockpit: export from the live Blender scene, mount, screens, lever, buttons | Blender MCP |
+| 6h | ghost run + local leaderboard | 6c |
+| 6i | touch controls, phone HUD, landscape hint | 6b, 6d |
 
-6a and 6b are independent and come first; 6e waits for the cockpit export.
+6a and 6b are independent and come first. Blender MCP is connected and the
+cockpit scene has been read: the lever is `Cockpit_Component_026` with its
+origin at the hinge and swings about its local X; the `cockpit` collection
+holds 106 objects for both cabs, and the live scene runs the train along
+Blender Y rather than the X the export script assumes, so 6g exports from
+the live scene with its own pivot and calibrates the cab onto the leading
+car's seat at load time.
 
 ## 6 · Testing
 
@@ -229,6 +319,10 @@ src/sim/drive.ts  stepDrive(state, dt, curvatureAtG) → DriveState
 - `driveCameras.test.ts`: each view returns a finite eye/target; trackside
   jumps ahead when passed; chase keeps its distance on a curve.
 - `replayBuffer.test.ts`: ring semantics, 15 s window, dynamic-phase extension.
+- `signals.test.ts`: block occupancy from the timetable, aspects for a
+  train ahead at each distance, SPAD detection.
+- weather in `drive.test.ts`: braking distance stretches by the adhesion
+  factor; boarding: counts, chime timing, early-close penalty.
 - Scene: Playwright screenshots of every camera view, the derail sequence
   (frames at 0 / 1 / 3 / 8 s), the crash panel, replay from each preset, and
   the phone layout — per CLAUDE.md, visual changes are verified in the browser.
