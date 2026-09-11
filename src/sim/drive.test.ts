@@ -4,10 +4,12 @@ import { MODEL_CAR_PITCH_M } from '../data/trainset'
 import {
   A_LAT_DERAIL,
   brakingDistanceM,
+  BUFFER_KMH,
   curveLimitKmh,
   DERAIL_HOLD_S,
   grade,
   newDrive,
+  restartFromLastStop,
   setNotch,
   stepDrive,
   type DriveEnv,
@@ -171,5 +173,57 @@ describe('derailment', () => {
     expect(frozen.gM).toBe(st.gM)
     expect(frozen.score).toBe(st.score)
     expect(st.score).toBeLessThanOrEqual(-1000)
+  })
+})
+
+describe('buffer stop and restart', () => {
+  it('hitting the buffer above 15 km/h derails; creeping in stops the run', () => {
+    // blowing through Tripunithura: the terminal is the next stop, the train
+    // is already 10 m past it under full power, the buffer is 60 m past it
+    const last = stations.length - 1
+    let st: DriveState = {
+      ...newDrive(0, STRAIGHT),
+      nextStopOrder: last,
+      lastStopOrder: last - 1,
+      gM: stations[last].sKm * 1000 + 10,
+      phase: 'run',
+      vMs: 8,
+    }
+    st = run(setNotch(st, 4), 12)
+    expect(st.phase).toBe('derailed')
+    expect(st.derail!.cause).toBe('buffer')
+    expect(st.derail!.limitKmh).toBe(BUFFER_KMH)
+    expect(st.derail!.lastStopOrder).toBe(last - 1)
+
+    let slow: DriveState = {
+      ...newDrive(0, STRAIGHT),
+      nextStopOrder: last,
+      gM: stations[last].sKm * 1000 + 55,
+      phase: 'run',
+      vMs: 2, // 7 km/h
+    }
+    slow = run(slow, 5)
+    expect(slow.phase).toBe('done')
+    expect(slow.derail).toBeNull()
+  })
+
+  it('restarts at the last station with doors open, keeping the score and stops', () => {
+    let st = setNotch(newDrive(0, CURVE_100), 4)
+    st = run(st, 50, CURVE_100)
+    expect(st.phase).toBe('derailed')
+    const again = restartFromLastStop(st, CURVE_100)
+    expect(again.phase).toBe('ready')
+    expect(again.doorsOpen).toBe(true)
+    expect(again.vMs).toBe(0)
+    expect(again.notch).toBe(0)
+    expect(again.gM).toBe(CURVE_100.gAt(stations[0].sKm))
+    expect(again.nextStopOrder).toBe(1)
+    expect(again.score).toBe(st.score)
+    expect(again.stops).toBe(st.stops)
+    expect(again.derail).toBeNull()
+    // and it can be driven again
+    const moving = run(setNotch(again, 4), 5, CURVE_100)
+    expect(moving.phase).toBe('run')
+    expect(moving.gM).toBeGreaterThan(again.gM)
   })
 })

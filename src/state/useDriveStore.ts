@@ -1,6 +1,6 @@
 /** Drive-mode session state: physics state + camera choice + keyboard intents. */
 import { create } from 'zustand'
-import { newDrive, setNotch, stepDrive, type DriveState } from '../sim/drive'
+import { newDrive, restartFromLastStop, setNotch, stepDrive, type DriveState } from '../sim/drive'
 
 export type DriveCam = 'cab' | 'chase'
 
@@ -9,6 +9,8 @@ interface DriveStore {
   cam: DriveCam
   start: (dir: 0 | 1) => void
   exit: () => void
+  /** after a derailment: back to the last platform, run intact */
+  restart: () => void
   nudgeNotch: (delta: number) => void
   emergency: () => void
   toggleCam: () => void
@@ -30,6 +32,13 @@ export const useDriveStore = create<DriveStore>((set, get) => ({
     set({ drive: newDrive(dir), cam: 'chase' })
   },
   exit: () => set({ drive: null }),
+  restart: () => {
+    const d = get().drive
+    if (d?.phase === 'derailed') {
+      lastTickMs = performance.now()
+      set({ drive: restartFromLastStop(d) })
+    }
+  },
   nudgeNotch: (delta) => {
     const d = get().drive
     if (d) set({ drive: setNotch(d, d.notch + delta) })
@@ -45,6 +54,6 @@ export const useDriveStore = create<DriveStore>((set, get) => ({
     lastTickMs = now
     if (dtSec <= 0) return
     const d = get().drive
-    if (d && d.phase !== 'done') set({ drive: stepDrive(d, dtSec) })
+    if (d && d.phase !== 'done' && d.phase !== 'derailed') set({ drive: stepDrive(d, dtSec) })
   },
 }))

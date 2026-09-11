@@ -23,6 +23,8 @@ export const A_LAT_WARN = 1.6
 export const A_LAT_DERAIL = 2.6
 /** it must stay above the limit this long — a blip at a curve entry is survivable with the brake */
 export const DERAIL_HOLD_S = 0.6
+/** hitting the terminal buffer stop faster than this derails too */
+export const BUFFER_KMH = 15
 /** derailing costs this on top of whatever the run had earned */
 const DERAIL_PENALTY = 1000
 const DWELL_SEC = 10
@@ -213,6 +215,9 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
   // has no next stop, but it still has a buffer to hit.
   const [g0, g1] = env.bufferG
   if ((st.dir === 0 && st.gM > g1) || (st.dir === 1 && st.gM < g0)) {
+    if (kmh(st.vMs) > BUFFER_KMH) {
+      return derailed(st, env, { cause: 'buffer', limitKmh: BUFFER_KMH, radiusM: Infinity })
+    }
     st.phase = 'done'
     st.vMs = 0
     return st
@@ -280,6 +285,26 @@ function derailed(
       speedKmh: kmh(st.vMs),
       lastStopOrder: st.lastStopOrder,
     },
+  }
+}
+
+/** Back to the last platform the train stopped at, doors open, run intact. */
+export function restartFromLastStop(st: DriveState, env: DriveEnv = REAL_ENV): DriveState {
+  const order = st.lastStopOrder
+  return {
+    ...st,
+    gM: env.gAt(stations[order].sKm),
+    sKm: stations[order].sKm,
+    vMs: 0,
+    notch: 0,
+    phase: 'ready',
+    doorsOpen: true,
+    dwellRemainSec: 0,
+    nextStopOrder: order + (st.dir === 0 ? 1 : -1),
+    distToNextM: 0,
+    lateralMs2: 0,
+    overLimitS: 0,
+    derail: null,
   }
 }
 
