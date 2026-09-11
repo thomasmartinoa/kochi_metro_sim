@@ -96,11 +96,7 @@ export function DrivePanel() {
           <div className="flex items-baseline justify-between">
             <span
               className={`font-mono text-4xl font-semibold tabular-nums ${
-                drive.penaltyBrake
-                  ? 'text-pinkline'
-                  : drive.overspeed
-                    ? 'text-lemon'
-                    : 'text-paper'
+                drive.overspeed ? 'text-lemon' : 'text-paper'
               }`}
             >
               {Math.round(vKmh)}

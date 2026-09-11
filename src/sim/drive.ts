@@ -17,7 +17,6 @@ import { curvatureAtG, gAt, sAtG } from './alignment'
 export const NOTCH_MIN = -5 // -5 = emergency, -4..-1 service brake
 export const NOTCH_MAX = 4 // 1..4 power
 export const LINE_SPEED_KMH = 80
-export const PENALTY_SPEED_KMH = 85
 const DWELL_SEC = 10
 const STOP_TOLERANCE_M = 5
 /** run-out past a terminal before the buffer stop */
@@ -74,8 +73,6 @@ export interface DriveState {
   score: number
   stops: StopResult[]
   overspeed: boolean
-  /** true while the overspeed penalty brake is latched */
-  penaltyBrake: boolean
   startedAtMs: number | null
 }
 
@@ -95,7 +92,6 @@ export function newDrive(dir: 0 | 1, env: DriveEnv = REAL_ENV): DriveState {
     score: 0,
     stops: [],
     overspeed: false,
-    penaltyBrake: false,
     startedAtMs: null,
   }
 }
@@ -145,13 +141,9 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
   }
 
   // --- physics ---
-  const vKmh = kmh(st.vMs)
-  st.overspeed = vKmh > LINE_SPEED_KMH
-  if (vKmh > PENALTY_SPEED_KMH) st.penaltyBrake = true
-  if (st.penaltyBrake) {
-    if (vKmh <= LINE_SPEED_KMH - 5) st.penaltyBrake = false
-    else st.notch = Math.min(st.notch, -3)
-  }
+  // Line speed is a rule, not a governor: the driver may break it, and the
+  // score, the curves and the physics are the judge. Nothing here brakes.
+  st.overspeed = kmh(st.vMs) > LINE_SPEED_KMH
 
   let a = 0
   if (st.notch > 0) a = (st.notch / NOTCH_MAX) * TRAINSET.accelMs2
@@ -217,9 +209,7 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
 }
 
 export function setNotch(st: DriveState, notch: number): DriveState {
-  const clamped = Math.max(NOTCH_MIN, Math.min(NOTCH_MAX, notch))
-  if (st.penaltyBrake && clamped > -3) return { ...st, notch: -3 }
-  return { ...st, notch: clamped }
+  return { ...st, notch: Math.max(NOTCH_MIN, Math.min(NOTCH_MAX, notch)) }
 }
 
 /** braking distance from current speed at full service brake (for the HUD) */

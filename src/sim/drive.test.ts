@@ -52,14 +52,16 @@ describe('drive physics', () => {
     expect(st.sKm).toBeGreaterThan(stations[0].sKm)
   })
 
-  it('caps at the penalty brake even when power is held', () => {
+  it('never brakes for the driver: full power past 85 km/h keeps accelerating', () => {
     let st = setNotch(newDrive(0, STRAIGHT), 4)
-    for (let t = 0; t < 120; t += 0.05) {
-      st = setNotch(st, 4) // driver keeps demanding full power
-      st = stepDrive(st, 0.05, STRAIGHT)
-      expect(st.vMs * 3.6).toBeLessThan(86)
-    }
-    expect(st.vMs * 3.6).toBeGreaterThan(30) // still rolling, not parked
+    st = run(st, 30) // ~100 km/h by now on the synthetic straight
+    expect(st.vMs * 3.6).toBeGreaterThan(85)
+    const before = st.vMs
+    st = run(st, 5)
+    expect(st.notch).toBe(4)
+    expect(st.vMs).toBeGreaterThan(before)
+    expect(st.overspeed).toBe(true)
+    expect('penaltyBrake' in st).toBe(false)
   })
 
   it('scores a stop at the station mark', () => {
