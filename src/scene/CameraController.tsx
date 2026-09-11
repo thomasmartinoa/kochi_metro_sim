@@ -56,6 +56,16 @@ const FLY_MS = 1100
 const FOLLOW_LERP = 5
 /** a follow starts with a flight if the vehicle is further than this off-screen */
 const FLY_TO_FOLLOW_M = 400
+/**
+ * Explore's ride-along. Following a train there is a shot, not a tool: the
+ * camera settles to a low three-quarter framing and circles the train slowly
+ * as it runs, until the user takes the mouse — then it is theirs, rigidly
+ * following as in Tracker. Radians per second; a full circle in about a minute.
+ */
+const RIDE_ORBIT_RATE = 0.1
+const RIDE_DIST_M = 62
+const RIDE_HEIGHT_M = 16
+const RIDE_SETTLE = 0.6
 
 const MAP_BOUNDS = (() => {
   const nw = project(overlayMeta.north, overlayMeta.west)
@@ -109,6 +119,8 @@ export function CameraController() {
   const keys = useRef<Set<string>>(new Set())
   const shift = useRef(false)
   const landingT0 = useRef(0)
+  /** the user has grabbed the camera since this follow began */
+  const held = useRef(false)
 
   const pose = useMemo(() => ({ pos: new THREE.Vector3(), heading: new THREE.Vector3() }), [])
   const v = useMemo(
@@ -142,6 +154,7 @@ export function CameraController() {
     const el = gl.domElement
     const grab = () => {
       fly.current = null // let go the instant the user takes hold
+      held.current = true // and the ride-along stops circling for them
     }
     const down = (e: KeyboardEvent) => {
       shift.current = e.shiftKey
@@ -190,6 +203,7 @@ export function CameraController() {
         if (sel?.kind === 'train' || sel?.kind === 'boat') {
           follow.current = { kind: sel.kind, id: sel.id }
           anchored.current = false
+          held.current = false
           return
         }
         follow.current = null
@@ -314,6 +328,20 @@ export function CameraController() {
         v.delta.copy(anchor.current).sub(controls.target)
         controls.target.add(v.delta)
         camera.position.add(v.delta)
+        // Explore: circle the train cinematically until the user takes hold
+        if (store.appMode === 'explore' && !held.current) {
+          v.tmp.copy(camera.position).sub(controls.target)
+          const horiz = Math.hypot(v.tmp.x, v.tmp.z)
+          const ang = Math.atan2(v.tmp.z, v.tmp.x) + RIDE_ORBIT_RATE * dt
+          const k = Math.min(1, dt * RIDE_SETTLE)
+          const r = horiz + (RIDE_DIST_M - horiz) * k
+          const h = v.tmp.y + (RIDE_HEIGHT_M - v.tmp.y) * k
+          camera.position.set(
+            controls.target.x + Math.cos(ang) * r,
+            controls.target.y + h,
+            controls.target.z + Math.sin(ang) * r,
+          )
+        }
       } else {
         follow.current = null
       }

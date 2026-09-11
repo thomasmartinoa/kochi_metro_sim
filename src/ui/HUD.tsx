@@ -5,6 +5,7 @@
 import { waterRoutes } from '../sim/waterEngine'
 import { useSimStore } from '../state/useSimStore'
 import { DrivePanel } from './DrivePanel'
+import { ExploreStrip } from './ExploreStrip'
 import { InfoPanel } from './InfoPanel'
 import { Legend } from './Legend'
 import { ModeSwitcher } from './ModeSwitcher'
@@ -107,8 +108,11 @@ export function HUD() {
       <div className="relative flex items-end justify-between gap-4">
         <div className="hidden lg:block">{tracker && (water ? <WaterLegend /> : <Legend />)}</div>
         {!drive && (
-          <div className="absolute left-1/2 bottom-0 w-full max-w-xl -translate-x-1/2">
-            <TimeControls />
+          <div className="absolute left-1/2 bottom-0 flex w-full max-w-xl -translate-x-1/2 flex-col items-center gap-2">
+            {explore && !water && <ExploreStrip />}
+            <div className="w-full">
+              <TimeControls />
+            </div>
           </div>
         )}
         <div className="ml-auto self-end text-right font-display text-[10px] leading-tight tracking-wide text-paper-dim/70">
