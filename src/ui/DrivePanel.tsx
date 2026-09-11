@@ -59,9 +59,7 @@ export function DrivePanel() {
 
   const vKmh = drive.vMs * 3.6
   const target = stations[drive.nextStopOrder]
-  const distM = target
-    ? Math.abs((drive.dir === 0 ? target.sKm - drive.sKm : drive.sKm - target.sKm) * 1000)
-    : 0
+  const distM = target ? Math.abs(drive.distToNextM) : 0
   const brakeNeed = brakingDistanceM(drive.vMs)
   const lastStop = drive.stops[drive.stops.length - 1]
   const nStops = drive.dir === 0 ? stations.length - 1 : stations.length - 1

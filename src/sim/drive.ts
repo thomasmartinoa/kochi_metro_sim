@@ -2,9 +2,17 @@
  * Drive-a-train physics + scoring — pure functions, no three/react deps.
  * The player runs a special service: power/brake notches, stop at every
  * station on the mark, doors, scoring for accuracy + speed discipline.
+ *
+ * The sim moves in GEOMETRIC metres along the drawn line (`gM`), not in
+ * timetable chainage: chainage runs 0.7-1.6x real distance locally (see
+ * alignment.ts), and a physics rate in m/s² is only honest in real metres.
+ * `sKm` is derived from `gM` every step for everything that speaks chainage.
+ * The line itself comes in through `DriveEnv`, so tests run on synthetic
+ * track and the real alignment is just one environment.
  */
 import { stations } from '../data/network'
 import { TRAINSET } from '../data/trainset'
+import { curvatureAtG, gAt, sAtG } from './alignment'
 
 export const NOTCH_MIN = -5 // -5 = emergency, -4..-1 service brake
 export const NOTCH_MAX = 4 // 1..4 power
@@ -12,6 +20,31 @@ export const LINE_SPEED_KMH = 80
 export const PENALTY_SPEED_KMH = 85
 const DWELL_SEC = 10
 const STOP_TOLERANCE_M = 5
+/** run-out past a terminal before the buffer stop */
+const BUFFER_PAD_M = 60
+
+/** The line as the sim sees it: chainage <-> metres, and how it bends. */
+export interface DriveEnv {
+  /** chainage km -> metres along the drawn line */
+  gAt(sKm: number): number
+  /** metres along the drawn line -> chainage km */
+  sAtG(gM: number): number
+  /** signed curvature (1/m) at metres along the line */
+  curvatureAtG(gM: number): number
+  /** metres at which the buffer stops stand, [aluva end, tripunithura end] */
+  bufferG: [number, number]
+}
+
+/** The real Blue Line. */
+export const REAL_ENV: DriveEnv = {
+  gAt,
+  sAtG,
+  curvatureAtG,
+  bufferG: [
+    gAt(stations[0].sKm) - BUFFER_PAD_M,
+    gAt(stations[stations.length - 1].sKm) + BUFFER_PAD_M,
+  ],
+}
 
 export type DrivePhase = 'ready' | 'run' | 'dwell' | 'done'
 
@@ -24,7 +57,9 @@ export interface StopResult {
 
 export interface DriveState {
   dir: 0 | 1
-  /** distance along the up axis, km (same axis as the schedule engine) */
+  /** metres along the drawn line — the sim's own coordinate */
+  gM: number
+  /** chainage, derived from gM (same axis as the schedule engine) */
   sKm: number
   /** speed, m/s (always >= 0; direction handled by dir) */
   vMs: number
@@ -34,6 +69,8 @@ export interface DriveState {
   dwellRemainSec: number
   /** order index of the next station to stop at */
   nextStopOrder: number
+  /** real metres to the next stop's mark (negative once passed) */
+  distToNextM: number
   score: number
   stops: StopResult[]
   overspeed: boolean
@@ -42,10 +79,11 @@ export interface DriveState {
   startedAtMs: number | null
 }
 
-export function newDrive(dir: 0 | 1): DriveState {
+export function newDrive(dir: 0 | 1, env: DriveEnv = REAL_ENV): DriveState {
   const startOrder = dir === 0 ? 0 : stations.length - 1
   return {
     dir,
+    gM: env.gAt(stations[startOrder].sKm),
     sKm: stations[startOrder].sKm,
     vMs: 0,
     notch: 0,
@@ -53,6 +91,7 @@ export function newDrive(dir: 0 | 1): DriveState {
     doorsOpen: true,
     dwellRemainSec: 0,
     nextStopOrder: dir === 0 ? 1 : stations.length - 2,
+    distToNextM: 0,
     score: 0,
     stops: [],
     overspeed: false,
@@ -71,8 +110,14 @@ function scoreStop(errM: number): { points: number; label: string } {
   return { points: -100, label: 'OFF MARK' }
 }
 
+/** metres from the train to a station's mark, positive while still ahead */
+function distTo(st: DriveState, order: number, env: DriveEnv): number {
+  const g = env.gAt(stations[order].sKm)
+  return st.dir === 0 ? g - st.gM : st.gM - g
+}
+
 /** advance the drive sim by dt seconds (mutates a copy, returns it) */
-export function stepDrive(prev: DriveState, dtSec: number): DriveState {
+export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_ENV): DriveState {
   const st = { ...prev }
   const dt = Math.min(dtSec, 0.1)
 
@@ -115,16 +160,28 @@ export function stepDrive(prev: DriveState, dtSec: number): DriveState {
   a -= 0.004 * st.vMs // rolling/air drag
   st.vMs = Math.max(0, st.vMs + a * dt)
 
-  const dKm = (st.vMs * dt) / 1000
-  st.sKm += st.dir === 0 ? dKm : -dKm
+  st.gM += st.dir === 0 ? st.vMs * dt : -st.vMs * dt
+  st.sKm = env.sAtG(st.gM)
+
+  // --- the end of the line ---
+  // Checked before the stations: a train that has blown through the terminal
+  // has no next stop, but it still has a buffer to hit.
+  const [g0, g1] = env.bufferG
+  if ((st.dir === 0 && st.gM > g1) || (st.dir === 1 && st.gM < g0)) {
+    st.phase = 'done'
+    st.vMs = 0
+    return st
+  }
 
   // --- station logic ---
   const target = stations[st.nextStopOrder]
   if (!target) {
-    st.phase = 'done'
+    // past the last platform: roll on to the buffer, or come to rest
+    if (st.vMs === 0) st.phase = 'done'
     return st
   }
-  const distM = (st.dir === 0 ? target.sKm - st.sKm : st.sKm - target.sKm) * 1000
+  const distM = distTo(st, st.nextStopOrder, env)
+  st.distToNextM = distM
 
   const isTerminal = st.nextStopOrder === (st.dir === 0 ? stations.length - 1 : 0)
 
@@ -153,16 +210,9 @@ export function stepDrive(prev: DriveState, dtSec: number): DriveState {
     ]
     st.score -= 200
     st.nextStopOrder += st.dir === 0 ? 1 : -1
-    if (st.nextStopOrder < 0 || st.nextStopOrder >= stations.length) st.phase = 'done'
     return st
   }
 
-  // ran past the end of the line
-  const endS = st.dir === 0 ? stations[stations.length - 1].sKm + 0.2 : stations[0].sKm - 0.2
-  if ((st.dir === 0 && st.sKm > endS) || (st.dir === 1 && st.sKm < endS)) {
-    st.phase = 'done'
-    st.vMs = 0
-  }
   return st
 }
 
