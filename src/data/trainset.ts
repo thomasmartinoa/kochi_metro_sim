@@ -38,6 +38,14 @@ export const SPAN_PITCH_M = 30.71
  */
 export const MODEL_CAR_PITCH_M = 18.56
 
+/**
+ * Distance between a car's two bogie centres. A car does not bend: it sits on
+ * its bogies and its body chords the curve between them, so on a bend the
+ * body's heading is the bogie-to-bogie line, not the track tangent at its
+ * centre. Roughly two-thirds of the car pitch, as on the real Metropolis.
+ */
+export const BOGIE_SPACING_M = 12.6
+
 /** Brand / world colour tokens. */
 export const COLORS = {
   kmrlTurquoise: '#12B3A6',

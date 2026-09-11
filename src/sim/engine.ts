@@ -4,6 +4,7 @@
  * Positions interpolate the REAL KMRL stop_times along the real track distance axis.
  */
 import { stations, trips } from '../data/network'
+import { TRAINSET } from '../data/trainset'
 import type { ServiceId, TripData } from '../data/types'
 import { DAY_SEC, istDayTime, serviceForDow } from './clock'
 
@@ -29,10 +30,54 @@ export interface TrainState {
 
 const sKmOf = (order: number) => stations[order].sKm
 
-/** Smoothstep easing approximating accel/cruise/brake between stops. */
-const ease = (f: number) => f * f * (3 - 2 * f)
-/** d(ease)/df — max 1.5 at f=0.5 (speed peaks mid-segment). */
-const easeD = (f: number) => 6 * f * (1 - f)
+const ACCEL = TRAINSET.accelMs2
+const BRAKE = TRAINSET.brakeMs2
+
+/**
+ * Where a train is, and how fast, `t` seconds into a run of `distM` metres
+ * that the timetable gives `durS` seconds.
+ *
+ * A trapezoid: pull away at the trainset's service acceleration, hold a
+ * cruise, brake at its service deceleration onto the mark. The cruise speed
+ * is whatever makes the run land exactly on the timetable — solve
+ * distM = v*durS - v^2*(1/a + 1/b)/2 for the smaller root, so there is always
+ * a cruise phase. (An ease curve was used before. Its speed peaks mid-run and
+ * is still climbing a third of the way in, so a train never visibly pulled
+ * away or braked; it drifted between stations at what read as one speed.)
+ *
+ * Distance here is timetable chainage, not ground metres — the engine speaks
+ * only sKm (see alignment.ts) — so the rates are exact in that axis.
+ */
+function runAt(distM: number, durS: number, t: number): { frac: number; vMs: number } {
+  if (distM <= 0 || durS <= 0) return { frac: 0, vMs: 0 }
+  const k = (1 / ACCEL + 1 / BRAKE) / 2
+  const disc = durS * durS - 4 * k * distM
+  let v: number
+  let ta: number
+  let tb: number
+  if (disc >= 0) {
+    v = (durS - Math.sqrt(disc)) / (2 * k)
+    ta = v / ACCEL
+    tb = v / BRAKE
+  } else {
+    // the timetable is tighter than the rates allow: no cruise, and the
+    // accelerate/brake split keeps their ratio while both scale up to fit
+    v = (2 * distM) / durS
+    ta = (durS * BRAKE) / (ACCEL + BRAKE)
+    tb = durS - ta
+  }
+  const tc = durS - ta - tb
+  if (t <= ta) {
+    const a = v / ta
+    return { frac: (0.5 * a * t * t) / distM, vMs: a * t }
+  }
+  if (t <= ta + tc) {
+    return { frac: (0.5 * v * ta + v * (t - ta)) / distM, vMs: v }
+  }
+  const r = Math.max(0, durS - t)
+  const b = v / tb
+  return { frac: (distM - 0.5 * b * r * r) / distM, vMs: b * r }
+}
 
 /** Occupancy heuristic: peaks in commute hours and toward the city centre. */
 function occupancyAt(daySec: number, sKm: number, service: ServiceId): number {
@@ -80,16 +125,15 @@ export function tripStateAt(trip: TripData, t: number): TrainState | null {
       const [nOrder, nArr] = stops[i + 1]
       if (t > dep && t < nArr) {
         // running between stops i and i+1
-        const f = (t - dep) / (nArr - dep)
         const sA = sKmOf(order)
         const sB = sKmOf(nOrder)
-        const s = sA + (sB - sA) * ease(f)
-        const speedKms = (Math.abs(sB - sA) * easeD(f)) / (nArr - dep) // km per sec
+        const { frac, vMs } = runAt(Math.abs(sB - sA) * 1000, nArr - dep, t - dep)
+        const s = sA + (sB - sA) * frac
         return {
           ...base,
           phase: 'run',
           sKm: s,
-          speedKmh: speedKms * 3600,
+          speedKmh: vMs * 3.6,
           doorsOpen: false,
           prevStationOrder: order,
           nextStationOrder: nOrder,

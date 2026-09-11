@@ -7,7 +7,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { MODEL_CAR_PITCH_M } from '../data/trainset'
-import { offsetBy, poseAt } from '../sim/alignment'
+import { carPoseAt, offsetBy, poseAt, trackOffsetBy } from '../sim/alignment'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { CarModel, useCarParts } from './MetroTrain'
@@ -78,12 +78,12 @@ export function DriveTrain() {
     const d = useDriveStore.getState().drive
     if (!d) return
 
-    // position the three cars
+    // the three cars, each on its bogies, spaced along their own rail
     for (let c = 0; c < 3; c++) {
       const car = group.current.children[c] as THREE.Group
       const offsetM = (1 - c) * CAR_LEN
-      const sCar = offsetBy(d.sKm, d.dir === 0 ? offsetM : -offsetM)
-      poseAt(sCar, d.dir, pose)
+      const sCar = trackOffsetBy(d.sKm, d.dir === 0 ? offsetM : -offsetM, d.dir)
+      carPoseAt(sCar, d.dir, pose)
       car.position.copy(pose.pos)
       tmp.copy(pose.pos).add(pose.heading)
       car.lookAt(tmp)

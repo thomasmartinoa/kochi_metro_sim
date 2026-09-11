@@ -17,7 +17,7 @@ import { Text, useGLTF } from '@react-three/drei'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import labelFont from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff?url'
-import { G_END, G_START, centerAtG, stationPoses } from '../sim/alignment'
+import { G_END, G_START, centerAtG, curvatureAtG, stationPoses } from '../sim/alignment'
 import { SPAN_PITCH_M } from '../data/trainset'
 import { useSimStore } from '../state/useSimStore'
 import { prepareMetroMaterial } from './metroMaterials'
@@ -46,10 +46,16 @@ function useParts(url: string) {
   }, [scene])
 }
 
+interface SpanPose {
+  matrix: THREE.Matrix4
+  /** signed curvature (1/m) at the span's centre */
+  curv: number
+}
+
 /** Poses for every span along the line, chunked for frustum culling. */
 function useSpanChunks() {
   return useMemo(() => {
-    const all: THREE.Matrix4[] = []
+    const all: SpanPose[] = []
     const q = new THREE.Quaternion()
     const one = new THREE.Vector3(1, 1, 1)
     // stepped in true metres: the spans butt end to end, so pacing them by GTFS
@@ -58,9 +64,9 @@ function useSpanChunks() {
       const { pos, tan } = centerAtG(g)
       // the model's length runs along +Z, so aim +Z down the track tangent
       q.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tan.clone().setY(0).normalize())
-      all.push(new THREE.Matrix4().compose(pos, q, one))
+      all.push({ matrix: new THREE.Matrix4().compose(pos, q, one), curv: curvatureAtG(g) })
     }
-    const chunks: THREE.Matrix4[][] = []
+    const chunks: SpanPose[][] = []
     for (let i = 0; i < all.length; i += SPANS_PER_CHUNK) {
       chunks.push(all.slice(i, i + SPANS_PER_CHUNK))
     }
@@ -68,25 +74,69 @@ function useSpanChunks() {
   }, [])
 }
 
-function SpanChunk({
-  matrices,
-  parts,
-}: {
-  matrices: THREE.Matrix4[]
-  parts: { geometry: THREE.BufferGeometry; material: THREE.Material }[]
-}) {
+/**
+ * Bend each span to the curve it sits on.
+ *
+ * A span is a rigid 30.7 m piece aimed along the tangent at its centre. On a
+ * bend that leaves both its ends off the arc and every joint a wedge — the
+ * deck read as a chain of straight planks. Instead the vertex shader wraps
+ * the span round a circle of the local radius: length along +Z becomes arc,
+ * lateral +X (the left of travel) stays at its offset from that arc. Ends
+ * land on the curve, joints meet, rails and parapets sweep through. Per
+ * instance, so the straight spans stay straight and the geometry stays one
+ * instanced draw.
+ */
+function bendToCurve(material: THREE.Material): void {
+  const m = material as THREE.MeshStandardMaterial
+  if ((m.userData as { bent?: boolean }).bent) return
+  ;(m.userData as { bent?: boolean }).bent = true
+  const prev = m.onBeforeCompile
+  m.onBeforeCompile = (shader, renderer) => {
+    prev?.(shader, renderer)
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        attribute float aCurv;
+        // wrap a point (lateral x, along z) round a circle of radius 1/k, centre
+        // at (1/k, 0): x' = r - (r - x)cos(zk), z' = (r - x)sin(zk)
+        vec3 bendSpan(vec3 p) {
+          float k = aCurv;
+          if (abs(k) < 1e-5) return p;
+          float r = 1.0 / k;
+          float ang = p.z * k;
+          float d = r - p.x;
+          return vec3(r - d * cos(ang), p.y, d * sin(ang));
+        }`,
+      )
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        transformed = bendSpan(transformed);`,
+      )
+  }
+  m.customProgramCacheKey = () => 'kochi-span-bend'
+}
+
+function SpanChunk({ poses, parts }: { poses: SpanPose[]; parts: { geometry: THREE.BufferGeometry; material: THREE.Material }[] }) {
   return (
     <>
       {parts.map((p, i) => (
         <instancedMesh
           key={i}
-          args={[p.geometry, p.material, matrices.length]}
+          args={[p.geometry, p.material, poses.length]}
           frustumCulled
           ref={(m) => {
             if (!m) return
-            matrices.forEach((mat, k) => m.setMatrixAt(k, mat))
+            poses.forEach((sp, k) => m.setMatrixAt(k, sp.matrix))
             m.instanceMatrix.needsUpdate = true
+            const curv = new Float32Array(poses.map((sp) => sp.curv))
+            m.geometry.setAttribute('aCurv', new THREE.InstancedBufferAttribute(curv, 1))
+            bendToCurve(m.material as THREE.Material)
             m.computeBoundingSphere()
+            // the bend can pull a span's far corners up to a couple of metres
+            // off its straight footprint; keep the cull sphere honest
+            if (m.boundingSphere) m.boundingSphere.radius += 3
           }}
         />
       ))}
@@ -100,7 +150,7 @@ function Viaduct() {
   return (
     <group>
       {chunks.map((c, i) => (
-        <SpanChunk key={i} matrices={c} parts={parts} />
+        <SpanChunk key={i} poses={c} parts={parts} />
       ))}
     </group>
   )

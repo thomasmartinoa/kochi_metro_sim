@@ -7,7 +7,7 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { MODEL_CAR_PITCH_M } from '../data/trainset'
 import { liveTrainStates, type TrainState } from '../sim/engine'
-import { offsetBy, poseAt } from '../sim/alignment'
+import { carPoseAt, trackOffsetBy } from '../sim/alignment'
 import { useSimStore } from '../state/useSimStore'
 import { mat } from './materials'
 import { CarModel, useCarParts, type Part } from './MetroTrain'
@@ -71,14 +71,15 @@ export function Trains() {
       }
       g.visible = true
       g.userData.tripId = st.tripId
-      // position each car along the track so the trainset bends with curves
+      // each car sits on its two bogies and chords the curve between them;
+      // the cars are spaced along the rail they run on, not the centreline,
+      // so the couplers meet round bends (see alignment.ts)
       for (let c = 0; c < 3; c++) {
         const car = g.children[c] as THREE.Group
         // car 0 leads in the direction of travel
         const offsetM = (1 - c) * CAR_LEN
-        // offsetBy, not sKm arithmetic — the cars have a real length (see alignment.ts)
-        const sCar = offsetBy(st.sKm, st.dir === 0 ? offsetM : -offsetM)
-        poseAt(sCar, st.dir, pose)
+        const sCar = trackOffsetBy(st.sKm, st.dir === 0 ? offsetM : -offsetM, st.dir)
+        carPoseAt(sCar, st.dir, pose)
         car.position.copy(pose.pos)
         lookTarget.copy(pose.pos).add(pose.heading)
         car.lookAt(lookTarget)
