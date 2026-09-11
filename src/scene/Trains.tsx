@@ -8,6 +8,7 @@ import * as THREE from 'three'
 import { MODEL_CAR_PITCH_M } from '../data/trainset'
 import { liveTrainStates, type TrainState } from '../sim/engine'
 import { carPoseAt, trackOffsetBy } from '../sim/alignment'
+import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { mat } from './materials'
 import { CarModel, useCarParts, type Part } from './MetroTrain'
@@ -18,10 +19,11 @@ const CAR_LEN = MODEL_CAR_PITCH_M
 const MARKER_RADIUS = 4.2
 /**
  * Marker radius as a fraction of viewport height, held constant at any zoom.
- * 0.011 puts it around 14 px on a 1440-tall window — a comfortable click target
- * that reads as a pin rather than a disc parked over the train.
+ * 0.0055 is ~8 px on a 1440-tall window: a 16 px dot, still an easy click
+ * target, that reads as a pin over the train rather than a disc parked on it.
+ * (It was twice this and swamped the trainset at street level.)
  */
-const MARKER_SCREEN_FRAC = 0.011
+const MARKER_SCREEN_FRAC = 0.0055
 
 function TrainModel({ parts }: { parts: Part[][] }) {
   return (
@@ -58,14 +60,18 @@ export function Trains() {
   }, [camera])
 
   useFrame(() => {
-    const epochMs = useSimStore.getState().epochMs
-    const states = liveTrainStates(epochMs)
+    const sim = useSimStore.getState()
+    const states = liveTrainStates(sim.epochMs)
     statesRef.current = states
+    // While the player drives, their track is theirs alone: the timetable's
+    // trains in that direction would run straight through them. Only the
+    // opposing direction keeps its scheduled service, passing on the other rail.
+    const drive = sim.appMode === 'drive' ? useDriveStore.getState().drive : null
     for (let i = 0; i < POOL; i++) {
       const g = groupRefs.current[i]
       if (!g) continue
       const st = states[i]
-      if (!st) {
+      if (!st || (drive && st.dir === drive.dir)) {
         g.visible = false
         continue
       }
@@ -87,7 +93,7 @@ export function Trains() {
       // floating marker above the middle car — always visible & clickable
       const marker = g.children[3] as THREE.Group
       const mid = g.children[1] as THREE.Group
-      marker.position.set(mid.position.x, mid.position.y + 11, mid.position.z)
+      marker.position.set(mid.position.x, mid.position.y + 9, mid.position.z)
       marker.quaternion.copy(camera.quaternion)
       const markerMesh = marker.children[0] as THREE.Mesh
       markerMesh.material = st.dir === 0 ? mat.markerUp : mat.markerDown
@@ -98,7 +104,7 @@ export function Trains() {
       // target, so what matters is how big it is under the cursor. Scale by
       // distance (and vertical FOV, so it survives a resize) to keep it there.
       const dist = camera.position.distanceTo(marker.position)
-      marker.scale.setScalar(dist * markerScale * (isSelected ? 1.4 : 1))
+      marker.scale.setScalar(dist * markerScale * (isSelected ? 1.5 : 1))
     }
   })
 
@@ -124,7 +130,7 @@ export function Trains() {
               <circleGeometry args={[4.2, 24]} />
             </mesh>
             <mesh position={[0, 0, -0.1]} material={mat.markerRing}>
-              <ringGeometry args={[4.2, 5.2, 24]} />
+              <ringGeometry args={[4.2, 4.8, 24]} />
             </mesh>
           </group>
         </group>
