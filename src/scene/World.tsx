@@ -15,6 +15,7 @@ import { CameraController } from './CameraController'
 import { City, Palms } from './City'
 import { CityGLB } from './CityGLB'
 import { DriveTrain } from './DriveTrain'
+import { SpeedBoards } from './drive/SpeedBoards'
 import { HorizonHaze } from './HorizonHaze'
 import { Line3D } from './Line3D'
 import { PinkLine } from './PinkLine'
@@ -125,6 +126,7 @@ export function World() {
         <Line3D />
         <Trains />
         <DriveTrain />
+        <SpeedBoards />
       </Suspense>
       {/* Water Metro stays off the map entirely until it ships — routes,
           terminals and boats alike. It is built on the `water` branch, where
