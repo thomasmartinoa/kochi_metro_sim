@@ -6,7 +6,9 @@ import { OrbitControls } from '@react-three/drei'
 import { Component, Suspense, useEffect, type ReactNode } from 'react'
 import type * as THREE from 'three'
 import { WATER_METRO_ENABLED } from '../config'
-import { centerAt } from '../sim/alignment'
+import { stations } from '../data/network'
+import { centerAt, gAt } from '../sim/alignment'
+import { stepDrive } from '../sim/drive'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { Atmosphere } from './Atmosphere'
@@ -76,6 +78,23 @@ function DevCam() {
     w.__driveNotch = (n: number) => {
       const d = useDriveStore.getState().drive
       if (d) useDriveStore.getState().nudgeNotch(n - d.notch)
+    }
+    // step the drive sim by dt seconds regardless of frame rate, for tests
+    w.__driveStep = (dt: number) => {
+      const d = useDriveStore.getState().drive
+      if (d) useDriveStore.setState({ drive: stepDrive(d, dt) })
+    }
+    // teleport the drive to a chainage, at rest, for testing curves and crashes
+    w.__driveJump = (sKm: number) => {
+      const d = useDriveStore.getState().drive
+      if (!d) return
+      // the next stop is the first station past the jump in the direction of travel
+      const idx = stations.findIndex((st) => (d.dir === 0 ? st.sKm > sKm : st.sKm >= sKm))
+      const nextStopOrder = d.dir === 0 ? (idx < 0 ? stations.length - 1 : idx) : Math.max(0, (idx < 0 ? stations.length : idx) - 1)
+      const lastStopOrder = nextStopOrder + (d.dir === 0 ? -1 : 1)
+      useDriveStore.setState({
+        drive: { ...d, gM: gAt(sKm), sKm, vMs: 0, phase: 'run', nextStopOrder, lastStopOrder },
+      })
     }
   }, [camera, controls, gl, scene])
   return null

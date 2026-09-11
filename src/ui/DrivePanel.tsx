@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react'
 import { stations } from '../data/network'
-import { brakingDistanceM, grade, LINE_SPEED_KMH, NOTCH_MAX, NOTCH_MIN } from '../sim/drive'
+import { A_LAT_WARN, brakingDistanceM, grade, LINE_SPEED_KMH, NOTCH_MAX, NOTCH_MIN } from '../sim/drive'
 import { useDriveStore } from '../state/useDriveStore'
 
 function StartScreen() {
@@ -44,6 +44,7 @@ function StartScreen() {
 export function DrivePanel() {
   const drive = useDriveStore((s) => s.drive)
   const exit = useDriveStore((s) => s.exit)
+  const restart = useDriveStore((s) => s.restart)
   const nudgeNotch = useDriveStore((s) => s.nudgeNotch)
   const toggleCam = useDriveStore((s) => s.toggleCam)
   const cam = useDriveStore((s) => s.cam)
@@ -66,7 +67,31 @@ export function DrivePanel() {
 
   return (
     <div className="hud-panel pointer-events-auto flex w-80 flex-col gap-2.5 px-5 py-4">
-      {drive.phase === 'done' ? (
+      {drive.phase === 'derailed' && drive.derail ? (
+        <>
+          <div className="font-display text-sm font-semibold tracking-widest text-pinkline">
+            DERAILED
+          </div>
+          <div className="font-display text-[13px] leading-snug text-paper">
+            {drive.derail.cause === 'curve'
+              ? `${Math.round(drive.derail.speedKmh)} km/h into a ${Math.round(drive.derail.radiusM)} m curve · limit ${Math.round(drive.derail.limitKmh)}`
+              : `${Math.round(drive.derail.speedKmh)} km/h into the buffer stop · limit ${Math.round(drive.derail.limitKmh)}`}
+          </div>
+          <div className="font-mono text-3xl font-semibold text-pinkline">{drive.score}</div>
+          <button
+            onClick={restart}
+            className="rounded-md bg-kmrl px-3 py-1.5 font-display text-sm font-semibold text-ink"
+          >
+            Restart from {stations[drive.derail.lastStopOrder].name}
+          </button>
+          <button
+            onClick={exit}
+            className="rounded px-2 py-0.5 font-mono text-[11px] text-paper-dim hover:bg-panel hover:text-paper"
+          >
+            exit
+          </button>
+        </>
+      ) : drive.phase === 'done' ? (
         <>
           <div className="font-display text-sm font-semibold tracking-widest text-paper-dim">
             RUN COMPLETE
@@ -174,6 +199,26 @@ export function DrivePanel() {
                   brake point {Math.round(brakeNeed)} m
                 </span>
               </div>
+            </div>
+          )}
+
+          {drive.ahead && (
+            <div
+              className={`flex items-baseline justify-between rounded-md px-3 py-1.5 ${
+                drive.lateralMs2 > A_LAT_WARN ? 'bg-pinkline/25' : 'bg-lemon/15'
+              }`}
+            >
+              <span className="font-display text-[11px] tracking-wide text-paper-dim">
+                {drive.ahead.distM === 0 ? 'IN CURVE' : 'CURVE AHEAD'}
+              </span>
+              <span className="font-mono text-sm tabular-nums text-paper">
+                <span className={drive.lateralMs2 > A_LAT_WARN ? 'text-pinkline' : 'text-lemon'}>
+                  {Math.round(drive.ahead.limitKmh)} km/h
+                </span>
+                {drive.ahead.distM > 0 && (
+                  <span className="text-paper-dim"> · {Math.round(drive.ahead.distM)} m</span>
+                )}
+              </span>
             </div>
           )}
 
