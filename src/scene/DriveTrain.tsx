@@ -7,10 +7,11 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { MODEL_CAR_PITCH_M } from '../data/trainset'
-import { carPoseAt, offsetBy, poseAt, trackOffsetBy } from '../sim/alignment'
+import { carPoseAt, curvatureAtG, gAt, offsetBy, poseAt, trackOffsetBy } from '../sim/alignment'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { CarModel, useCarParts } from './MetroTrain'
+import { shake, wreck } from './drive/wreck'
 
 const CAR_LEN = MODEL_CAR_PITCH_M
 let keysBound = false
@@ -79,18 +80,63 @@ export function DriveTrain() {
     if (!d) return
 
     // the three cars, each on its bogies, spaced along their own rail
-    for (let c = 0; c < 3; c++) {
-      const car = group.current.children[c] as THREE.Group
-      const offsetM = (1 - c) * CAR_LEN
-      const sCar = trackOffsetBy(d.sKm, d.dir === 0 ? offsetM : -offsetM, d.dir)
-      carPoseAt(sCar, d.dir, pose)
-      car.position.copy(pose.pos)
-      tmp.copy(pose.pos).add(pose.heading)
-      car.lookAt(tmp)
+    const placeCars = () => {
+      for (let c = 0; c < 3; c++) {
+        const car = group.current!.children[c] as THREE.Group
+        const offsetM = (1 - c) * CAR_LEN
+        const sCar = trackOffsetBy(d.sKm, d.dir === 0 ? offsetM : -offsetM, d.dir)
+        carPoseAt(sCar, d.dir, pose)
+        car.position.copy(pose.pos)
+        tmp.copy(pose.pos).add(pose.heading)
+        car.lookAt(tmp)
+      }
+    }
+
+    if (d.phase === 'derailed') {
+      // the first derailed frame: hand the cars' poses and the set's velocity
+      // to the wreck, then hide — from here the rigid bodies are the train.
+      // Pose from the sim first: the meshes may not have been drawn at the
+      // derail chainage yet (a derail can land between frames).
+      if (!wreck.ready) {
+        placeCars()
+        wreck.cars = [0, 1, 2].map((c) => {
+          const car = group.current!.children[c] as THREE.Group
+          return { position: car.position.clone(), quaternion: car.quaternion.clone() }
+        })
+        const lead = group.current.children[0] as THREE.Group
+        wreck.velocity
+          .set(0, 0, 1)
+          .applyQuaternion(lead.quaternion)
+          .multiplyScalar((d.derail?.speedKmh ?? 0) / 3.6)
+        wreck.kappa = curvatureAtG(gAt(d.sKm))
+        wreck.lateralMs2 = d.lateralMs2
+        wreck.lead.copy(lead.position)
+        wreck.atMs = performance.now()
+        wreck.ready = true
+      }
+      group.current.visible = false
+    } else {
+      wreck.ready = false
+      group.current.visible = true
+      placeCars()
     }
 
     // camera
     if (controls) {
+      if (d.phase === 'derailed') {
+        // hang off the wreck's lead car, close enough to see it go, shaking
+        // with the impact (the replay cameras in 6c take over from here)
+        camGoal.copy(wreck.lead).add(tmp.set(26, 11, 26))
+        lookGoal.copy(wreck.lead)
+        camera.position.lerp(camGoal, Math.min(1, dt * 2))
+        controls.target.lerp(lookGoal, Math.min(1, dt * 4))
+        if (shake.value > 0) {
+          camera.position.x += (Math.random() - 0.5) * shake.value
+          camera.position.y += (Math.random() - 0.5) * shake.value * 0.6
+        }
+        controls.update()
+        return
+      }
       poseAt(offsetBy(d.sKm, (d.dir === 0 ? 1 : -1) * (CAR_LEN * 1.5 + 1)), d.dir, pose)
       if (cam === 'cab') {
         // eye just ahead of the nose so the cab shell sits behind the camera

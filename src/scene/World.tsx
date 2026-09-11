@@ -3,7 +3,7 @@
  */
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { Component, Suspense, useEffect, type ReactNode } from 'react'
+import { Component, Suspense, lazy, useEffect, type ReactNode } from 'react'
 import type * as THREE from 'three'
 import { WATER_METRO_ENABLED } from '../config'
 import { stations } from '../data/network'
@@ -18,6 +18,7 @@ import { City, Palms } from './City'
 import { CityGLB } from './CityGLB'
 import { DriveTrain } from './DriveTrain'
 import { SpeedBoards } from './drive/SpeedBoards'
+import { wreck } from './drive/wreck'
 import { HorizonHaze } from './HorizonHaze'
 import { Line3D } from './Line3D'
 import { PinkLine } from './PinkLine'
@@ -37,6 +38,22 @@ class CityBoundary extends Component<{ children: ReactNode }, { failed: boolean 
   render() {
     return this.state.failed ? <City /> : this.props.children
   }
+}
+
+const DriveWreck = lazy(() => import('./drive/DriveWreck'))
+
+/**
+ * The wreck, only while a drive is derailed. Rapier and its WASM live in
+ * this chunk; warming it when Drive mode opens means a crash doesn't wait
+ * on a download.
+ */
+function WreckGate() {
+  const derailed = useDriveStore((s) => s.drive?.phase === 'derailed')
+  const driving = useSimStore((s) => s.appMode === 'drive')
+  useEffect(() => {
+    if (driving) void import('./drive/DriveWreck')
+  }, [driving])
+  return derailed ? <DriveWreck /> : null
 }
 
 /** Advances the shared sim clock once per frame. */
@@ -78,6 +95,14 @@ function DevCam() {
     w.__driveNotch = (n: number) => {
       const d = useDriveStore.getState().drive
       if (d) useDriveStore.getState().nudgeNotch(n - d.notch)
+    }
+    // where the wreck's lead car is (null until a derail), for tests
+    w.__wreckLead = () => (wreck.ready ? wreck.lead.clone() : null)
+    // advance the wreck by s physics-seconds regardless of frame rate, for tests
+    w.__wreckStep = (s: number) => {
+      if (!wreck.advance) return null // not mounted yet
+      wreck.advance(s)
+      return wreck.simT
     }
     // step the drive sim by dt seconds regardless of frame rate, for tests
     w.__driveStep = (dt: number) => {
@@ -145,6 +170,7 @@ export function World() {
         <Line3D />
         <Trains />
         <DriveTrain />
+        <WreckGate />
         <SpeedBoards />
       </Suspense>
       {/* Water Metro stays off the map entirely until it ships — routes,
