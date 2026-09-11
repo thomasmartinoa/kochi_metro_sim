@@ -119,19 +119,39 @@ function bendToCurve(material: THREE.Material): void {
 }
 
 function SpanChunk({ poses, parts }: { poses: SpanPose[]; parts: { geometry: THREE.BufferGeometry; material: THREE.Material }[] }) {
+  // Each chunk carries its own per-instance curvature, so each needs its own
+  // geometry container. The parts' geometry is one object shared by every
+  // chunk, and an InstancedBufferAttribute set on it by one chunk is read by
+  // all of them — so once the short tail chunk mounted last, every 24-span
+  // chunk was drawing with a 12-entry attribute. WebGL treats that as an
+  // out-of-range read and skips the draw: on a real GPU the whole viaduct
+  // vanished. Vertex buffers stay shared by reference; only the container
+  // and the curvature attribute are per chunk.
+  const geometries = useMemo(
+    () =>
+      parts.map((p) => {
+        const g = new THREE.BufferGeometry()
+        g.index = p.geometry.index
+        for (const [name, attr] of Object.entries(p.geometry.attributes)) g.setAttribute(name, attr)
+        g.setAttribute(
+          'aCurv',
+          new THREE.InstancedBufferAttribute(new Float32Array(poses.map((sp) => sp.curv)), 1),
+        )
+        return g
+      }),
+    [parts, poses],
+  )
   return (
     <>
       {parts.map((p, i) => (
         <instancedMesh
           key={i}
-          args={[p.geometry, p.material, poses.length]}
+          args={[geometries[i], p.material, poses.length]}
           frustumCulled
           ref={(m) => {
             if (!m) return
             poses.forEach((sp, k) => m.setMatrixAt(k, sp.matrix))
             m.instanceMatrix.needsUpdate = true
-            const curv = new Float32Array(poses.map((sp) => sp.curv))
-            m.geometry.setAttribute('aCurv', new THREE.InstancedBufferAttribute(curv, 1))
             bendToCurve(m.material as THREE.Material)
             m.computeBoundingSphere()
             // the bend can pull a span's far corners up to a couple of metres
