@@ -8,6 +8,7 @@ import {
   curveLimitKmh,
   DERAIL_HOLD_S,
   grade,
+  LOOKAHEAD_M,
   newDrive,
   restartFromLastStop,
   setNotch,
@@ -225,5 +226,26 @@ describe('buffer stop and restart', () => {
     const moving = run(setNotch(again, 4), 5, CURVE_100)
     expect(moving.phase).toBe('run')
     expect(moving.gM).toBeGreaterThan(again.gM)
+  })
+})
+
+describe('curve lookahead', () => {
+  it('reports the tightest restriction ahead and its distance, or nothing on open track', () => {
+    let st: DriveState = { ...newDrive(0, CURVE_100), gM: 700, phase: 'run', vMs: 10 }
+    st = stepDrive(st, 0.05, CURVE_100)
+    expect(st.ahead).not.toBeNull()
+    expect(Math.round(st.ahead!.limitKmh)).toBe(58)
+    // the curve starts at 1000 m; the leading car is a car pitch ahead of gM
+    expect(st.ahead!.distM).toBeGreaterThan(1000 - 700 - MODEL_CAR_PITCH_M - 20)
+    expect(st.ahead!.distM).toBeLessThan(1000 - 700 - MODEL_CAR_PITCH_M + 20)
+    expect(st.ahead!.distM).toBeLessThanOrEqual(LOOKAHEAD_M)
+
+    let open: DriveState = { ...newDrive(0, CURVE_100), gM: 100, phase: 'run', vMs: 10 }
+    open = stepDrive(open, 0.05, CURVE_100)
+    expect(open.ahead).toBeNull()
+
+    let inside: DriveState = { ...newDrive(0, CURVE_100), gM: 1200, phase: 'run', vMs: 10 }
+    inside = stepDrive(inside, 0.05, CURVE_100)
+    expect(inside.ahead!.distM).toBe(0)
   })
 })

@@ -27,6 +27,9 @@ export const DERAIL_HOLD_S = 0.6
 export const BUFFER_KMH = 15
 /** derailing costs this on top of whatever the run had earned */
 const DERAIL_PENALTY = 1000
+/** how far ahead of the leading car the HUD looks for the next restriction */
+export const LOOKAHEAD_M = 400
+const LOOKAHEAD_STEP_M = 10
 const DWELL_SEC = 10
 const STOP_TOLERANCE_M = 5
 /** run-out past a terminal before the buffer stop */
@@ -74,6 +77,27 @@ export interface DerailRecord {
   lastStopOrder: number
 }
 
+export interface Restriction {
+  limitKmh: number
+  /** metres from the leading car to where it begins; 0 while inside it */
+  distM: number
+  radiusM: number
+}
+
+/** The tightest curve under line speed within LOOKAHEAD_M of leadG, travelling in dir. */
+function restrictionAhead(leadG: number, dir: 0 | 1, env: DriveEnv): Restriction | null {
+  let best: Restriction | null = null
+  for (let d = 0; d <= LOOKAHEAD_M; d += LOOKAHEAD_STEP_M) {
+    const kappa = env.curvatureAtG(leadG + (dir === 0 ? d : -d))
+    const limitKmh = curveLimitKmh(kappa)
+    if (limitKmh >= LINE_SPEED_KMH) continue
+    if (!best || limitKmh < best.limitKmh) {
+      best = { limitKmh, distM: d, radiusM: 1 / Math.abs(kappa) }
+    }
+  }
+  return best
+}
+
 export type DrivePhase = 'ready' | 'run' | 'dwell' | 'derailed' | 'done'
 
 export interface StopResult {
@@ -106,6 +130,8 @@ export interface DriveState {
   lateralMs2: number
   /** seconds spent above A_LAT_DERAIL without relief */
   overLimitS: number
+  /** the next curve restriction within LOOKAHEAD_M, for the HUD */
+  ahead: Restriction | null
   derail: DerailRecord | null
   /** the last station the train stopped at (its start, until the first stop) */
   lastStopOrder: number
@@ -130,6 +156,7 @@ export function newDrive(dir: 0 | 1, env: DriveEnv = REAL_ENV): DriveState {
     overspeed: false,
     lateralMs2: 0,
     overLimitS: 0,
+    ahead: null,
     derail: null,
     lastStopOrder: startOrder,
     startedAtMs: null,
@@ -201,6 +228,7 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
   const leadG = st.gM + (st.dir === 0 ? 1 : -1) * MODEL_CAR_PITCH_M
   const kappa = env.curvatureAtG(leadG)
   st.lateralMs2 = st.vMs * st.vMs * Math.abs(kappa)
+  st.ahead = restrictionAhead(leadG, st.dir, env)
   st.overLimitS = st.lateralMs2 > A_LAT_DERAIL ? st.overLimitS + dt : 0
   if (st.overLimitS >= DERAIL_HOLD_S) {
     return derailed(st, env, {
@@ -304,6 +332,7 @@ export function restartFromLastStop(st: DriveState, env: DriveEnv = REAL_ENV): D
     distToNextM: 0,
     lateralMs2: 0,
     overLimitS: 0,
+    ahead: null,
     derail: null,
   }
 }
