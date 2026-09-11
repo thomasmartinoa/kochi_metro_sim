@@ -66,11 +66,12 @@ three's maths, which is allowed).
 Drive mode is entered — it is ~700 KB gzipped and Tracker/Explore never need
 it.
 
-- **On rails** the three cars are *kinematic* bodies whose transforms are
-  written every frame from the alignment (`carPoseAt` / `trackOffsetBy`,
-  exactly as now). Physics never moves a train that is on its rails, so
-  ordinary driving stays deterministic and identical to today.
-- **On derail** each car flips to *dynamic* with its current linear velocity,
+- **On rails** the three cars are plain meshes posed from the alignment every
+  frame (`carPoseAt` / `trackOffsetBy`, exactly as in Tracker). Rapier is not
+  loaded and never moves a train that is on its rails, so ordinary driving
+  stays deterministic and identical to today.
+- **On derail** the plain cars hide and a lazily-loaded wreck spawns three
+  *dynamic* bodies in their last poses with the set's linear velocity,
   a lateral kick proportional to the lateral acceleration that caused it, and
   a roll impulse toward the outside of the curve. Cars keep their couplings as
   spherical joints with limits, so the set jack-knifes and drags rather than
@@ -79,8 +80,9 @@ it.
   ±250 m around the derail point at rail level (9 m wide, with parapet walls
   0.9 m high) so cars can hit the parapet, ride it, or go over the edge and
   fall to the ground. Nothing else in the world is a collider.
-- The dynamic phase is time-limited (8 s, or when every car is at rest).
-  After that the wreck is frozen in place until restart.
+- The dynamic phase is time-limited (8 s of physics time — the wreck keeps
+  its own clock, so slow devices see the same crash later, not a different
+  one). After that the wreck is frozen in place until restart.
 
 ### 3.2 · The derail rule (in `drive.ts`)
 
