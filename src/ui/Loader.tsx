@@ -14,7 +14,7 @@ import { tilesSettled } from '../scene/TileGround'
 /** Hard cap so a slow/offline tile network never keeps the loader up forever.
  *  Generous because the landing panorama is wide (many tiles) and the camera is
  *  held still until they settle — the cap is only a dead-network guard. */
-const TILE_WAIT_MS = 14000
+const TILE_WAIT_MS = 22000
 /** Absolute ceiling: never hold the veil longer than this, whatever stalls. */
 const HARD_CAP_MS = 30000
 
