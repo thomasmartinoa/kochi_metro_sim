@@ -11,12 +11,20 @@
  * track and the real alignment is just one environment.
  */
 import { stations } from '../data/network'
-import { TRAINSET } from '../data/trainset'
+import { MODEL_CAR_PITCH_M, TRAINSET } from '../data/trainset'
 import { curvatureAtG, gAt, sAtG } from './alignment'
 
 export const NOTCH_MIN = -5 // -5 = emergency, -4..-1 service brake
 export const NOTCH_MAX = 4 // 1..4 power
 export const LINE_SPEED_KMH = 80
+/** lateral acceleration (m/s²) at which the HUD warns and the cab alarms */
+export const A_LAT_WARN = 1.6
+/** lateral acceleration above which the train is derailing */
+export const A_LAT_DERAIL = 2.6
+/** it must stay above the limit this long — a blip at a curve entry is survivable with the brake */
+export const DERAIL_HOLD_S = 0.6
+/** derailing costs this on top of whatever the run had earned */
+const DERAIL_PENALTY = 1000
 const DWELL_SEC = 10
 const STOP_TOLERANCE_M = 5
 /** run-out past a terminal before the buffer stop */
@@ -45,7 +53,26 @@ export const REAL_ENV: DriveEnv = {
   ],
 }
 
-export type DrivePhase = 'ready' | 'run' | 'dwell' | 'done'
+/** The speed a curve of curvature kappa (1/m) can be taken at; Infinity on the straight. */
+export function curveLimitKmh(kappa: number): number {
+  const k = Math.abs(kappa)
+  return k < 1e-6 ? Infinity : 3.6 * Math.sqrt(A_LAT_DERAIL / k)
+}
+
+export interface DerailRecord {
+  cause: 'curve' | 'buffer'
+  gM: number
+  sKm: number
+  speedKmh: number
+  /** the limit that was broken (curve limit, or BUFFER_KMH) */
+  limitKmh: number
+  /** curve radius in metres at the derail point; Infinity for the buffer */
+  radiusM: number
+  /** the last station the train stopped at, for the restart */
+  lastStopOrder: number
+}
+
+export type DrivePhase = 'ready' | 'run' | 'dwell' | 'derailed' | 'done'
 
 export interface StopResult {
   stationOrder: number
@@ -73,6 +100,13 @@ export interface DriveState {
   score: number
   stops: StopResult[]
   overspeed: boolean
+  /** lateral acceleration on the leading car right now, m/s² */
+  lateralMs2: number
+  /** seconds spent above A_LAT_DERAIL without relief */
+  overLimitS: number
+  derail: DerailRecord | null
+  /** the last station the train stopped at (its start, until the first stop) */
+  lastStopOrder: number
   startedAtMs: number | null
 }
 
@@ -92,6 +126,10 @@ export function newDrive(dir: 0 | 1, env: DriveEnv = REAL_ENV): DriveState {
     score: 0,
     stops: [],
     overspeed: false,
+    lateralMs2: 0,
+    overLimitS: 0,
+    derail: null,
+    lastStopOrder: startOrder,
     startedAtMs: null,
   }
 }
@@ -117,7 +155,7 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
   const st = { ...prev }
   const dt = Math.min(dtSec, 0.1)
 
-  if (st.phase === 'done') return st
+  if (st.phase === 'done' || st.phase === 'derailed') return st
 
   if (st.phase === 'dwell') {
     st.dwellRemainSec -= dt
@@ -155,6 +193,21 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
   st.gM += st.dir === 0 ? st.vMs * dt : -st.vMs * dt
   st.sKm = env.sAtG(st.gM)
 
+  // --- the curve rule ---
+  // lateral acceleration on the leading car: v²·κ, with κ at the front of the
+  // set, a car pitch ahead of the reference car
+  const leadG = st.gM + (st.dir === 0 ? 1 : -1) * MODEL_CAR_PITCH_M
+  const kappa = env.curvatureAtG(leadG)
+  st.lateralMs2 = st.vMs * st.vMs * Math.abs(kappa)
+  st.overLimitS = st.lateralMs2 > A_LAT_DERAIL ? st.overLimitS + dt : 0
+  if (st.overLimitS >= DERAIL_HOLD_S) {
+    return derailed(st, env, {
+      cause: 'curve',
+      limitKmh: curveLimitKmh(kappa),
+      radiusM: 1 / Math.max(Math.abs(kappa), 1e-6),
+    })
+  }
+
   // --- the end of the line ---
   // Checked before the stations: a train that has blown through the terminal
   // has no next stop, but it still has a buffer to hit.
@@ -182,6 +235,7 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
     const { points, label } = scoreStop(distM)
     st.stops = [...st.stops, { stationOrder: target.order, errM: distM, points, label }]
     st.score += points
+    st.lastStopOrder = target.order
     if (isTerminal) {
       st.phase = 'done'
       st.doorsOpen = true
@@ -206,6 +260,27 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
   }
 
   return st
+}
+
+/** The moment it comes off: freeze the sim, take the penalty, write it up. */
+function derailed(
+  st: DriveState,
+  env: DriveEnv,
+  how: Pick<DerailRecord, 'cause' | 'limitKmh' | 'radiusM'>,
+): DriveState {
+  return {
+    ...st,
+    phase: 'derailed',
+    notch: 0,
+    score: st.score - DERAIL_PENALTY,
+    derail: {
+      ...how,
+      gM: st.gM,
+      sKm: env.sAtG(st.gM),
+      speedKmh: kmh(st.vMs),
+      lastStopOrder: st.lastStopOrder,
+    },
+  }
 }
 
 export function setNotch(st: DriveState, notch: number): DriveState {

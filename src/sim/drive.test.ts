@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { stations } from '../data/network'
+import { MODEL_CAR_PITCH_M } from '../data/trainset'
 import {
+  A_LAT_DERAIL,
   brakingDistanceM,
+  curveLimitKmh,
+  DERAIL_HOLD_S,
   grade,
   newDrive,
   setNotch,
@@ -16,6 +20,12 @@ const STRAIGHT: DriveEnv = {
   sAtG: (g) => g / 1000,
   curvatureAtG: () => 0,
   bufferG: [-60, stations[stations.length - 1].sKm * 1000 + 60],
+}
+
+/** Straight from 0, then a constant 100 m radius curve from 1000 m on. */
+const CURVE_100: DriveEnv = {
+  ...STRAIGHT,
+  curvatureAtG: (g) => (g >= 1000 ? 1 / 100 : 0),
 }
 
 function run(st: DriveState, seconds: number, env: DriveEnv = STRAIGHT, dt = 0.05): DriveState {
@@ -101,5 +111,65 @@ describe('drive physics', () => {
     st = run(st, 15)
     expect(st.sKm).toBeLessThan(stations[stations.length - 1].sKm)
     expect(st.nextStopOrder).toBe(stations.length - 2)
+  })
+})
+
+describe('derailment', () => {
+  it('limit on a 100 m curve is 58 km/h, and the straight has none', () => {
+    expect(curveLimitKmh(1 / 100)).toBeCloseTo(3.6 * Math.sqrt(A_LAT_DERAIL * 100), 1)
+    expect(Math.round(curveLimitKmh(1 / 100))).toBe(58)
+    expect(curveLimitKmh(0)).toBe(Infinity)
+  })
+
+  it('a train under the limit takes the curve', () => {
+    let st = setNotch(newDrive(0, CURVE_100), 4)
+    st = run(st, 14, CURVE_100) // ~49 km/h, still on the straight
+    st = setNotch(st, 0)
+    st = run(st, 90, CURVE_100) // coasts round the bend
+    expect(st.phase).not.toBe('derailed')
+    expect(st.derail).toBeNull()
+    expect(st.gM).toBeGreaterThan(1000)
+  })
+
+  it('a train over the limit for longer than the hold time derails, with the record', () => {
+    let st = setNotch(newDrive(0, CURVE_100), 4)
+    st = run(st, 50, CURVE_100) // ~130 km/h into the curve at 1000 m
+    expect(st.phase).toBe('derailed')
+    expect(st.derail).not.toBeNull()
+    const d = st.derail!
+    expect(d.cause).toBe('curve')
+    expect(d.radiusM).toBeCloseTo(100, 0)
+    expect(Math.round(d.limitKmh)).toBe(58)
+    expect(d.speedKmh).toBeGreaterThan(58)
+    expect(d.lastStopOrder).toBe(0)
+    // the leading car is a car pitch ahead of the reference; it derailed a
+    // hold-time into the curve, not at its mouth
+    expect(d.gM).toBeGreaterThan(1000 - MODEL_CAR_PITCH_M)
+    expect(d.gM).toBeLessThan(1000 + (d.speedKmh / 3.6) * DERAIL_HOLD_S * 1.3)
+  })
+
+  it('a brief excursion over the limit with the brake on survives', () => {
+    // hold just over the limit (16.3 m/s vs 16.1) to the curve mouth, then
+    // emergency brake: a couple of tenths later the train is back under it
+    let st = setNotch(newDrive(0, CURVE_100), 4)
+    let guard = 0
+    while (st.gM < 1000 - MODEL_CAR_PITCH_M - 5 && guard++ < 20000) {
+      st = setNotch(st, st.vMs < 16.3 ? 2 : 0)
+      st = stepDrive(st, 0.05, CURVE_100)
+    }
+    st = setNotch(st, -5)
+    st = run(st, 10, CURVE_100)
+    expect(st.phase).not.toBe('derailed')
+    expect(st.gM).toBeGreaterThan(1000)
+  })
+
+  it('a derailed train no longer moves or scores', () => {
+    let st = setNotch(newDrive(0, CURVE_100), 4)
+    st = run(st, 50, CURVE_100)
+    expect(st.phase).toBe('derailed')
+    const frozen = run(setNotch(st, 4), 5, CURVE_100)
+    expect(frozen.gM).toBe(st.gM)
+    expect(frozen.score).toBe(st.score)
+    expect(st.score).toBeLessThanOrEqual(-1000)
   })
 })
