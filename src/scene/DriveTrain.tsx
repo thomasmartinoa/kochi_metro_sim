@@ -27,6 +27,13 @@ const DRONE_H_M = 13
 const DRONE_RATE = 0.2
 /** how fast the drone eases in from the chase distance, per second */
 const DRONE_EASE = 0.8
+/**
+ * A slow frame must not teleport the camera. Every per-frame motion below
+ * is computed with dt clamped here, so a 0.5 s hitch moves the drone the
+ * same small amount a smooth frame would, just later. The physics has its
+ * own clock for the same reason.
+ */
+const DRONE_MAX_DT = 1 / 30
 
 export function DriveTrain() {
   const group = useRef<THREE.Group>(null)
@@ -142,6 +149,7 @@ export function DriveTrain() {
     if (controls) {
       if (d.phase === 'derailed') {
         const dr = drone.current
+        const ddt = Math.min(dt, DRONE_MAX_DT)
         if (!dr.init) {
           // pick the orbit up from where the chase camera is: no cut
           tmp.copy(camera.position).sub(wreck.lead)
@@ -151,18 +159,20 @@ export function DriveTrain() {
           dr.init = true
         }
         // circle the wreck, easing in from the chase distance and height
-        dr.az += DRONE_RATE * dt
-        const k = Math.min(1, dt * DRONE_EASE)
+        dr.az += DRONE_RATE * ddt
+        const k = ddt * DRONE_EASE
         dr.r += (DRONE_R_M - dr.r) * k
         dr.h += (DRONE_H_M - dr.h) * k
-        camGoal.set(
+        // the orbit is about the lead car, which is itself moving: place the
+        // camera on the orbit directly rather than chasing a goal, so the
+        // wreck's motion never shows as a second lag on top of the ease
+        camera.position.set(
           wreck.lead.x + Math.cos(dr.az) * dr.r,
           wreck.lead.y + dr.h,
           wreck.lead.z + Math.sin(dr.az) * dr.r,
         )
         lookGoal.copy(wreck.lead).setY(wreck.lead.y + 1.5)
-        camera.position.lerp(camGoal, Math.min(1, dt * 3))
-        controls.target.lerp(lookGoal, Math.min(1, dt * 5))
+        controls.target.lerp(lookGoal, Math.min(1, ddt * 8))
         if (shake.value > 0) {
           camera.position.x += (Math.random() - 0.5) * shake.value
           camera.position.y += (Math.random() - 0.5) * shake.value * 0.6
