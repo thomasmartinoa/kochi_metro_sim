@@ -10,6 +10,7 @@ import { VIEW_LABEL, VIEWS } from '../sim/driveCameras'
 import { useDriveStore } from '../state/useDriveStore'
 import { useRunHistory } from '../state/runHistory'
 import { ReplayBar } from './ReplayBar'
+import { TOUCH_QUERY, useMediaQuery } from './useMediaQuery'
 
 const WEATHER_LABEL: Record<Weather, string> = {
   clear: 'Clear',
@@ -23,8 +24,9 @@ function StartScreen() {
   const start = useDriveStore((s) => s.start)
   const weather = useSimStore((s) => s.weather)
   const setWeather = useSimStore((s) => s.setWeather)
+  const touch = useMediaQuery(TOUCH_QUERY)
   return (
-    <div className="hud-panel pointer-events-auto flex w-80 flex-col gap-3 px-5 py-4">
+    <div className="hud-panel pointer-events-auto flex w-80 max-w-full flex-col gap-3 px-5 py-4 max-sm:gap-2 max-sm:px-3 max-sm:py-3">
       <div className="font-display text-sm font-semibold tracking-widest text-paper-dim">
         DRIVE A METROPOLIS
       </div>
@@ -73,13 +75,20 @@ function StartScreen() {
           Tripunithura → Aluva
         </button>
       </div>
-      <div className="font-mono text-[11px] leading-relaxed text-paper-dim">
-        W / ↑ power · S / ↓ brake · Space emergency
-        <br />
-        O doors · H horn · L headlights
-        <br />
-        C / V next / previous view · 1-0 pick a view · drag the lever, click the buttons
-      </div>
+      {touch ? (
+        <div className="font-mono text-[11px] leading-relaxed text-paper-dim">
+          Drag the lever on the left for power and brake · buttons below for doors, horn, camera and
+          the emergency stop
+        </div>
+      ) : (
+        <div className="font-mono text-[11px] leading-relaxed text-paper-dim">
+          W / ↑ power · S / ↓ brake · Space emergency
+          <br />
+          O doors · H horn · L headlights
+          <br />
+          C / V next / previous view · 1-0 pick a view · drag the lever, click the buttons
+        </div>
+      )}
       <Leaderboard />
     </div>
   )
@@ -140,7 +149,8 @@ function Leaderboard() {
   )
 }
 
-export function DrivePanel() {
+/** `compact`: the touch layout -- the lever and buttons live in TouchControls, so the desk is just the readouts */
+export function DrivePanel({ compact = false }: { compact?: boolean }) {
   const drive = useDriveStore((s) => s.drive)
   const exit = useDriveStore((s) => s.exit)
   const restart = useDriveStore((s) => s.restart)
@@ -171,7 +181,11 @@ export function DrivePanel() {
   const nStops = drive.dir === 0 ? stations.length - 1 : stations.length - 1
 
   return (
-    <div className="hud-panel pointer-events-auto flex w-80 flex-col gap-2.5 px-5 py-4">
+    <div
+      className={`hud-panel pointer-events-auto flex max-w-full flex-col ${
+        compact ? 'w-64 gap-1.5 px-3 py-2' : 'w-80 gap-2.5 px-5 py-4'
+      }`}
+    >
       {drive.phase === 'derailed' && drive.derail ? (
         <>
           <div className="font-display text-sm font-semibold tracking-widest text-pinkline">
@@ -265,7 +279,7 @@ export function DrivePanel() {
         <>
           <div className="flex items-baseline justify-between">
             <span
-              className={`font-mono text-4xl font-semibold tabular-nums ${
+              className={`font-mono font-semibold tabular-nums ${compact ? 'text-3xl' : 'text-4xl'} ${
                 drive.overspeed ? 'text-lemon' : 'text-paper'
               }`}
             >
@@ -303,15 +317,15 @@ export function DrivePanel() {
               )
             })}
           </div>
-          <div className="flex justify-between font-mono text-[10px] text-paper-dim">
+          <div className={`flex justify-between font-mono text-[10px] text-paper-dim ${compact ? 'hidden' : ''}`}>
             <span>EB</span>
             <span>BRAKE</span>
             <span>N</span>
             <span>POWER</span>
           </div>
 
-          {/* touch controls */}
-          <div className="flex gap-2">
+          {/* mouse controls; a phone gets the lever in TouchControls instead */}
+          <div className={`flex gap-2 ${compact ? 'hidden' : ''}`}>
             <button
               onClick={() => nudgeNotch(-1)}
               className="flex-1 rounded-md bg-lemon/85 py-1.5 font-display text-sm font-bold text-ink"
@@ -327,7 +341,7 @@ export function DrivePanel() {
           </div>
 
           {target && (
-            <div className="rounded-md bg-panel/70 px-3 py-2">
+            <div className={`rounded-md bg-panel/70 px-3 ${compact ? 'py-1' : 'py-2'}`}>
               <div className="flex items-baseline justify-between">
                 <span className="font-display text-[11px] tracking-wide text-paper-dim">
                   NEXT STOP
@@ -352,7 +366,7 @@ export function DrivePanel() {
           )}
 
           {drive.signal && (
-            <div className="flex items-baseline justify-between rounded-md bg-panel/70 px-3 py-1.5">
+            <div className={`flex items-baseline justify-between rounded-md bg-panel/70 px-3 ${compact ? 'py-0.5' : 'py-1.5'}`}>
               <span className="flex items-center gap-2 font-display text-[11px] tracking-wide text-paper-dim">
                 <span
                   className={`inline-block h-2.5 w-2.5 rounded-full ${
@@ -439,7 +453,7 @@ export function DrivePanel() {
               <button
                 onClick={horn}
                 title="Horn (H)"
-                className="rounded px-2 py-0.5 font-mono text-[11px] text-paper-dim hover:bg-panel hover:text-paper"
+                className={`rounded px-2 py-0.5 font-mono text-[11px] text-paper-dim hover:bg-panel hover:text-paper ${compact ? 'hidden' : ''}`}
               >
                 horn
               </button>
@@ -462,7 +476,7 @@ export function DrivePanel() {
             </div>
           )}
 
-          <div className="flex flex-wrap gap-1">
+          <div className={`flex flex-wrap gap-1 ${compact ? 'hidden' : ''}`}>
             {VIEWS.map((v, i) => (
               <button
                 key={v}
