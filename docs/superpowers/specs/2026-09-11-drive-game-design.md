@@ -263,6 +263,13 @@ long after boarding is scored late. The train's load affects acceleration
 slightly (heavier = slower), so a full train brakes later. No animated
 people in this pass.
 
+### 3.12a · Found during 6c, for 6i
+
+At viewports under ~900 px wide the right-hand panel column ("Plan a
+journey") overlaps the mode switcher and intercepts its clicks: the Drive
+button cannot be pressed. The phone/touch phase must restack the HUD so the
+switcher is never under a panel.
+
 ### 3.13 · Ghost and leaderboard (in place of multiplayer)
 
 Every completed or crashed run is serialised (the replay buffer already has
