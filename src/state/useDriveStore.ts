@@ -1,10 +1,24 @@
 /** Drive-mode session state: physics state + camera view + keyboard intents. */
 import { create } from 'zustand'
-import { ADHESION, newDrive, REAL_ENV, restartFromLastStop, setNotch, stepDrive, toggleDoors, withTraffic, type DriveState } from '../sim/drive'
+import {
+  ADHESION,
+  grade,
+  newDrive,
+  REAL_ENV,
+  restartFromLastStop,
+  setNotch,
+  stepDrive,
+  toggleDoors,
+  withTraffic,
+  type DriveState,
+} from '../sim/drive'
 import { liveTrainStates } from '../sim/engine'
 import { occupiedBlocks, signalAhead } from '../sim/signals'
 import { useSimStore } from './useSimStore'
 import { VIEWS, type DriveView } from '../sim/driveCameras'
+import { GhostRecorder, ON_TIME_S, type RunRecord } from '../sim/ghost'
+import { useRunHistory } from './runHistory'
+import { stations } from '../data/network'
 
 export type { DriveView }
 
@@ -16,6 +30,8 @@ interface DriveStore {
   drive: DriveState | null
   /** the timetable trip the player is standing in for, hidden for the run */
   takenOverTripId: string | null
+  /** the run just finished beat the direction's best: it is the ghost now */
+  newBest: boolean
   view: DriveView
   /** watching the crash replay (only reachable while derailed) */
   replaying: boolean
@@ -64,6 +80,28 @@ export function liveEnv(dir: 0 | 1) {
   return withTraffic(REAL_ENV, trains, { occupiedBlocks, signalAhead })
 }
 
+/** where the train has been this run, for the ghost */
+const ghost = new GhostRecorder()
+
+/** Book the run on the leaderboard; true when its tape is now the ghost. */
+function finishRun(d: DriveState): boolean {
+  const nStops = stations.length - 1
+  const rec: RunRecord = {
+    at: Date.now(),
+    dir: d.dir,
+    score: d.score,
+    grade: grade(d.score, nStops),
+    stops: d.stops.length,
+    goodStops: d.stops.filter((s) => s.points > 0).length,
+    onTime: d.stops.filter((s) => s.lateSec !== undefined && Math.abs(s.lateSec) <= ON_TIME_S).length,
+    outcome: d.phase === 'derailed' ? 'derailed' : 'done',
+    durationS: d.runS,
+  }
+  return useRunHistory
+    .getState()
+    .record(rec, { dir: d.dir, score: d.score, at: rec.at, samples: ghost.samples.slice() })
+}
+
 /** a scheduled train this close to the player's start is the one the player is driving */
 const SLOT_M = 120
 
@@ -86,6 +124,7 @@ function tripAtStart(dir: 0 | 1, startG: number): string | null {
 export const useDriveStore = create<DriveStore>((set, get) => ({
   drive: null,
   takenOverTripId: null,
+  newBest: false,
   view: 'cockpit',
   viewBeforeCrash: 'cockpit',
   replaying: false,
@@ -93,9 +132,11 @@ export const useDriveStore = create<DriveStore>((set, get) => ({
   start: (dir) => {
     lastTickMs = performance.now()
     const drive = newDrive(dir)
+    ghost.reset()
     set({
       drive,
       takenOverTripId: tripAtStart(dir, drive.gM),
+      newBest: false,
       view: 'cockpit',
       viewBeforeCrash: 'cockpit',
       replaying: false,
@@ -149,7 +190,11 @@ export const useDriveStore = create<DriveStore>((set, get) => ({
     const d = get().drive
     if (d && d.phase !== 'done' && d.phase !== 'derailed') {
       const adhesion = ADHESION[useSimStore.getState().weather]
-      set({ drive: stepDrive(d.adhesion === adhesion ? d : { ...d, adhesion }, dtSec, liveEnv(d.dir)) })
+      const next = stepDrive(d.adhesion === adhesion ? d : { ...d, adhesion }, dtSec, liveEnv(d.dir))
+      // the tape for the ghost: where we are on the run's clock
+      if (next.startedAtMs !== null) ghost.push(next.runS, next.gM)
+      const ended = next.phase === 'done' || next.phase === 'derailed'
+      set({ drive: next, ...(ended ? { newBest: finishRun(next) } : {}) })
     }
   },
 }))

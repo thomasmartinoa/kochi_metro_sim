@@ -11,6 +11,7 @@ import { centerAt, gAt } from '../sim/alignment'
 import { stepDrive } from '../sim/drive'
 import { trainStateById } from '../sim/engine'
 import { liveEnv, useDriveStore } from '../state/useDriveStore'
+import { useRunHistory } from '../state/runHistory'
 import { useSimStore } from '../state/useSimStore'
 import { Atmosphere } from './Atmosphere'
 import { Boats } from './Boats'
@@ -24,6 +25,7 @@ import { CabSounds } from './drive/CabSounds'
 import { SpeedBoards } from './drive/SpeedBoards'
 import { Signals } from './drive/Signals'
 import { Rain } from './drive/Rain'
+import { GhostTrain } from './drive/GhostTrain'
 import { replay } from './drive/replay'
 import { wreck } from './drive/wreck'
 import { HorizonHaze } from './HorizonHaze'
@@ -101,6 +103,7 @@ function DevCam() {
     }
     w.__setDaySec = (s: number) => useSimStore.getState().scrubToDaySec(s)
     w.__setWeather = (x: string) => useSimStore.getState().setWeather(x as never)
+    w.__runHistory = useRunHistory
     w.__trainSKm = (id: string) => trainStateById(useSimStore.getState().epochMs, id)?.sKm
     w.__drive = () => useDriveStore.getState().drive
     w.__driveView = (v: string) => useDriveStore.getState().setView(v as never)
@@ -197,6 +200,7 @@ export function World() {
         <SpeedBoards />
         <Signals />
         <Rain />
+        <GhostTrain />
       </Suspense>
       {/* Water Metro stays off the map entirely until it ships — routes,
           terminals and boats alike. It is built on the `water` branch, where

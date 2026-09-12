@@ -8,6 +8,7 @@ import { A_LAT_WARN, brakingDistanceM, grade, LINE_SPEED_KMH, NOTCH_MAX, NOTCH_M
 import { useSimStore } from '../state/useSimStore'
 import { VIEW_LABEL, VIEWS } from '../sim/driveCameras'
 import { useDriveStore } from '../state/useDriveStore'
+import { useRunHistory } from '../state/runHistory'
 import { ReplayBar } from './ReplayBar'
 
 const WEATHER_LABEL: Record<Weather, string> = {
@@ -79,6 +80,62 @@ function StartScreen() {
         <br />
         C / V next / previous view · 1-0 pick a view · drag the lever, click the buttons
       </div>
+      <Leaderboard />
+    </div>
+  )
+}
+
+const DIR_SHORT = ['ALV → TPN', 'TPN → ALV']
+
+function fmtWhen(at: number): string {
+  const d = new Date(at)
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/** Your runs in this browser, and which of them is the ghost. */
+function Leaderboard() {
+  const history = useRunHistory((s) => s.history)
+  const clear = useRunHistory((s) => s.clear)
+  const records = history.records
+  if (records.length === 0) {
+    return (
+      <div className="font-mono text-[10px] text-paper-dim">
+        Finish a run and it goes on the board here; your best becomes a ghost to race.
+      </div>
+    )
+  }
+  const best = [history.best[0], history.best[1]]
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between">
+        <div className="font-display text-[10px] font-semibold tracking-widest text-paper-dim">YOUR RUNS</div>
+        <button onClick={clear} className="font-mono text-[10px] text-paper-dim hover:text-pinkline">
+          clear
+        </button>
+      </div>
+      <div className="font-mono text-[10px] text-paper-dim">
+        ghost · {best[0] ? `${best[0].score} pts ${DIR_SHORT[0]}` : `no ${DIR_SHORT[0]} run yet`}
+        {' · '}
+        {best[1] ? `${best[1].score} pts ${DIR_SHORT[1]}` : `no ${DIR_SHORT[1]} run yet`}
+      </div>
+      <div className="max-h-32 overflow-y-auto font-mono text-[11px] leading-relaxed">
+        {records.map((r) => {
+          const isGhost = best[r.dir]?.at === r.at
+          return (
+            <div key={r.at} className="flex items-baseline justify-between gap-2">
+              <span className="shrink-0 text-paper-dim">{fmtWhen(r.at)}</span>
+              <span className="shrink-0 text-paper-dim">{DIR_SHORT[r.dir]}</span>
+              <span className="min-w-0 flex-1 truncate text-paper-dim">
+                {r.outcome === 'derailed' ? 'crashed' : `${r.goodStops}/${r.stops} stops · ${r.onTime} on time`}
+              </span>
+              <span className={`shrink-0 font-semibold ${r.outcome === 'derailed' ? 'text-pinkline' : 'text-lemon'}`}>
+                {r.score}
+                {isGhost ? ' ◆' : ''}
+              </span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -89,6 +146,7 @@ export function DrivePanel() {
   const restart = useDriveStore((s) => s.restart)
   const enterReplay = useDriveStore((s) => s.enterReplay)
   const replaying = useDriveStore((s) => s.replaying)
+  const newBest = useDriveStore((s) => s.newBest)
   const nudgeNotch = useDriveStore((s) => s.nudgeNotch)
   const view = useDriveStore((s) => s.view)
   const setView = useDriveStore((s) => s.setView)
@@ -153,6 +211,11 @@ export function DrivePanel() {
           </div>
           <div className="font-mono text-3xl font-semibold text-lemon">{drive.score}</div>
           <div className="font-display text-sm text-paper">{grade(drive.score, nStops)}</div>
+          {newBest && (
+            <div className="font-display text-[12px] font-semibold text-kmrl">
+              ◆ NEW BEST · this run is your ghost next time
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-2 font-mono text-[11px]">
             <div className="rounded-md bg-panel/70 px-2 py-1.5">
               <div className="text-paper-dim">STOPS</div>
