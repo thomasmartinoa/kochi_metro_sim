@@ -34,7 +34,14 @@ export const wreck = {
   simT: 0,
   /** advance the wreck by dt physics-seconds; installed by DriveWreck while mounted */
   advance: null as ((dt: number) => void) | null,
+  /** the hand-off has been written (DriveTrain, on the derail frame) */
   ready: false,
+  /**
+   * The rigid bodies are mounted and drawn. The plain cars stay visible
+   * until this flips, so there is never a frame with no train in it: the
+   * bodies spawn in exactly the plain cars' poses and the swap is invisible.
+   */
+  live: false,
 }
 
 /** camera shake amplitude, metres; decays after the derail */

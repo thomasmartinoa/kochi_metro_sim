@@ -43,17 +43,18 @@ class CityBoundary extends Component<{ children: ReactNode }, { failed: boolean 
 const DriveWreck = lazy(() => import('./drive/DriveWreck'))
 
 /**
- * The wreck, only while a drive is derailed. Rapier and its WASM live in
- * this chunk; warming it when Drive mode opens means a crash doesn't wait
- * on a download.
+ * The physics world, for as long as Drive mode is open. Rapier and its WASM
+ * live in this chunk and its init suspends, so it gets a Suspense boundary
+ * of its own: the metro layer above must not blink out while it loads.
  */
 function WreckGate() {
-  const derailed = useDriveStore((s) => s.drive?.phase === 'derailed')
   const driving = useSimStore((s) => s.appMode === 'drive')
-  useEffect(() => {
-    if (driving) void import('./drive/DriveWreck')
-  }, [driving])
-  return derailed ? <DriveWreck /> : null
+  if (!driving) return null
+  return (
+    <Suspense fallback={null}>
+      <DriveWreck />
+    </Suspense>
+  )
 }
 
 /** Advances the shared sim clock once per frame. */
@@ -98,6 +99,7 @@ function DevCam() {
     }
     // where the wreck's lead car is (null until a derail), for tests
     w.__wreckLead = () => (wreck.ready ? wreck.lead.clone() : null)
+    w.__wreckState = () => ({ ready: wreck.ready, live: wreck.live, simT: wreck.simT, hasAdvance: !!wreck.advance })
     // advance the wreck by s physics-seconds regardless of frame rate, for tests
     w.__wreckStep = (s: number) => {
       if (!wreck.advance) return null // not mounted yet

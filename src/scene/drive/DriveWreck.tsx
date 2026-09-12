@@ -1,13 +1,15 @@
 /**
  * The derailed trainset as rigid bodies.
  *
- * Mounted (lazily — Rapier is ~700 KB and Tracker never needs it) only while
- * the drive is in the derailed phase. Three dynamic cuboids in the cars'
- * last on-rail poses, carrying the set's velocity plus a lateral kick and a
- * roll toward the outside of the curve, joined at the couplers so the set
- * jack-knifes rather than scatters; a strip of deck and parapet colliders
- * along the line around the derail point, and the ground. Stepped by hand
- * so the first moments run in slow motion.
+ * Mounted (lazily — Rapier is ~850 KB gzipped and Tracker never needs it)
+ * for as long as Drive mode is open, so the physics world already exists
+ * when a crash comes: creating it on the derail frame was a visible hitch.
+ * Nothing is in the world until the sim derails. Then three dynamic cuboids
+ * spawn in the cars' last on-rail poses, carrying the set's velocity plus a
+ * lateral kick, a roll and a lift toward the outside of the curve, joined at
+ * the couplers so the set jack-knifes rather than scatters; under them a
+ * strip of deck and parapet colliders along the line, and the ground.
+ * Stepped by hand so the first moments run in slow motion.
  */
 import { useFrame } from '@react-three/fiber'
 import {
@@ -122,6 +124,8 @@ function LeadTracker({ body }: { body: RefObject<RapierRigidBody | null> }) {
   const acc = useRef(0)
   useEffect(() => {
     wreck.simT = 0
+    // the bodies are in the world from here: the plain cars may hide now
+    wreck.live = true
     // fixed 1/60 steps: the accumulator keeps it frame-rate independent
     wreck.advance = (dt: number) => {
       acc.current += dt
@@ -135,6 +139,7 @@ function LeadTracker({ body }: { body: RefObject<RapierRigidBody | null> }) {
     }
     return () => {
       wreck.advance = null
+      wreck.live = false
     }
   }, [step, body])
   useFrame((_, dt) => {
@@ -172,6 +177,7 @@ function Cars() {
         <RigidBody
           key={i}
           ref={refs[i]}
+          name="wreck-car"
           type="dynamic"
           position={[c.position.x, c.position.y + SPAWN_LIFT_M, c.position.z]}
           quaternion={c.quaternion.toArray() as [number, number, number, number]}
@@ -202,24 +208,19 @@ function Cars() {
 
 export default function DriveWreck() {
   const derail = useDriveStore((s) => s.drive?.derail ?? null)
-  // DriveTrain writes the hand-off on the first derailed frame; the phase
-  // change that mounts this can land a render earlier, so wait for it
-  const [armed, setArmed] = useState(wreck.ready)
-  useEffect(() => {
-    if (armed) return
-    const id = setInterval(() => {
-      if (wreck.ready) {
-        setArmed(true)
-        clearInterval(id)
-      }
-    }, 16)
-    return () => clearInterval(id)
-  }, [armed])
-  if (!derail || !armed) return null
+  // DriveTrain writes the hand-off in its useFrame on the derail frame; this
+  // runs later in the same frame (it mounted later), so the bodies are asked
+  // for on the very next render, in the plain cars' exact poses
+  const [armed, setArmed] = useState(false)
+  useFrame(() => {
+    if (derail && wreck.ready && !armed) setArmed(true)
+    else if (!derail && armed) setArmed(false)
+  })
+  const active = !!derail && armed
   return (
     <Physics gravity={[0, -9.81, 0]} paused>
-      <Deck gM={gAt(derail.sKm)} />
-      <Cars />
+      {active && <Deck gM={gAt(derail.sKm)} />}
+      {active && <Cars />}
     </Physics>
   )
 }
