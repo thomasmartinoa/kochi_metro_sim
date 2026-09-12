@@ -1,65 +1,47 @@
 /**
- * The player's trainset in drive mode + physics tick + cab/chase camera.
+ * The player's trainset in drive mode + the physics tick + the keys.
  * Reuses the Metropolis car model; runs as a special service alongside the
- * scheduled ghosts.
+ * scheduled trains of the opposing direction. Publishes the lead car's pose
+ * to `rig` every frame; DriveCamera owns the camera from there.
  */
-import { useFrame, useThree } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { MODEL_CAR_PITCH_M } from '../data/trainset'
-import { carPoseAt, curvatureAtG, gAt, offsetBy, poseAt, trackOffsetBy } from '../sim/alignment'
+import { carPoseAt, curvatureAtG, gAt, trackOffsetBy } from '../sim/alignment'
+import { VIEWS } from '../sim/driveCameras'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { CarModel, useCarParts } from './MetroTrain'
-import { shake, wreck } from './drive/wreck'
+import { rig } from './drive/rig'
+import { wreck } from './drive/wreck'
 
 const CAR_LEN = MODEL_CAR_PITCH_M
 let keysBound = false
 
-/**
- * The crash camera is a drone shot: it starts from wherever the chase camera
- * was — no cut — and circles the wreck slowly while easing in to this
- * distance and height. (6b replaces this with the camera rig.)
- */
-const DRONE_R_M = 34
-const DRONE_H_M = 13
-/** radians per second round the wreck: a full circle in about half a minute */
-const DRONE_RATE = 0.2
-/** how fast the drone eases in from the chase distance, per second */
-const DRONE_EASE = 0.8
-/**
- * A slow frame must not teleport the camera. Every per-frame motion below
- * is computed with dt clamped here, so a 0.5 s hitch moves the drone the
- * same small amount a smooth frame would, just later. The physics has its
- * own clock for the same reason.
- */
-const DRONE_MAX_DT = 1 / 30
 
 export function DriveTrain() {
   const group = useRef<THREE.Group>(null)
-  const camera = useThree((s) => s.camera)
-  const controls = useThree((s) => s.controls) as {
-    target: THREE.Vector3
-    update: () => void
-    enabled: boolean
-  } | null
 
   const pose = useMemo(() => ({ pos: new THREE.Vector3(), heading: new THREE.Vector3() }), [])
   const tmp = useMemo(() => new THREE.Vector3(), [])
-  const camGoal = useMemo(() => new THREE.Vector3(), [])
-  const lookGoal = useMemo(() => new THREE.Vector3(), [])
-  /** the drone's orbit about the wreck, seeded from the chase pose on the derail frame */
-  const drone = useRef({ init: false, az: 0, r: 0, h: 0 })
   const carParts = useCarParts()
 
   // keyboard controls (module flag prevents StrictMode double-binding)
   useEffect(() => {
     if (keysBound) return
     keysBound = true
+    const formFocused = () => {
+      const el = document.activeElement
+      return (
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLSelectElement ||
+        el instanceof HTMLTextAreaElement
+      )
+    }
     const onKey = (e: KeyboardEvent) => {
-      const { drive, nudgeNotch, emergency, toggleCam } = useDriveStore.getState()
-      if (!drive) return
-      if (e.repeat) return
+      const { drive, nudgeNotch, emergency, cycleView, setView } = useDriveStore.getState()
+      if (!drive || e.repeat || formFocused()) return
       switch (e.key) {
         case 'w':
         case 'W':
@@ -77,8 +59,17 @@ export function DriveTrain() {
           break
         case 'c':
         case 'C':
-          toggleCam()
+          cycleView(1)
           break
+        case 'v':
+        case 'V':
+          cycleView(-1)
+          break
+        default:
+          if (/^[1-9]$/.test(e.key)) {
+            const v = VIEWS[Number(e.key) - 1]
+            if (v) setView(v)
+          }
       }
     }
     window.addEventListener('keydown', onKey)
@@ -88,15 +79,17 @@ export function DriveTrain() {
     }
   }, [])
 
-  useFrame((_, dt) => {
-    const { drive, tick, cam } = useDriveStore.getState()
+  useFrame(() => {
+    const { drive, tick } = useDriveStore.getState()
     const driving = useSimStore.getState().appMode === 'drive' && drive
     if (!group.current) return
     group.current.visible = !!driving
-    if (!driving) return
+    if (!driving) {
+      rig.valid = false
+      return
+    }
 
-    void dt // physics dt derives from wall-clock inside the store
-    tick()
+    tick() // physics dt derives from wall-clock inside the store
     const d = useDriveStore.getState().drive
     if (!d) return
 
@@ -134,67 +127,25 @@ export function DriveTrain() {
         wreck.lead.copy(lead.position)
         wreck.atMs = performance.now()
         wreck.ready = true
+        useDriveStore.getState().setView('crash')
       }
       // stay drawn until the bodies are: they spawn in these exact poses, so
       // the frame the swap happens on looks like every frame before it
       group.current.visible = !wreck.live
     } else {
       wreck.ready = false
-      drone.current.init = false
       group.current.visible = true
       placeCars()
     }
 
-    // camera
-    if (controls) {
-      if (d.phase === 'derailed') {
-        const dr = drone.current
-        const ddt = Math.min(dt, DRONE_MAX_DT)
-        if (!dr.init) {
-          // pick the orbit up from where the chase camera is: no cut
-          tmp.copy(camera.position).sub(wreck.lead)
-          dr.az = Math.atan2(tmp.z, tmp.x)
-          dr.r = Math.hypot(tmp.x, tmp.z)
-          dr.h = tmp.y
-          dr.init = true
-        }
-        // circle the wreck, easing in from the chase distance and height
-        dr.az += DRONE_RATE * ddt
-        const k = ddt * DRONE_EASE
-        dr.r += (DRONE_R_M - dr.r) * k
-        dr.h += (DRONE_H_M - dr.h) * k
-        // the orbit is about the lead car, which is itself moving: place the
-        // camera on the orbit directly rather than chasing a goal, so the
-        // wreck's motion never shows as a second lag on top of the ease
-        camera.position.set(
-          wreck.lead.x + Math.cos(dr.az) * dr.r,
-          wreck.lead.y + dr.h,
-          wreck.lead.z + Math.sin(dr.az) * dr.r,
-        )
-        lookGoal.copy(wreck.lead).setY(wreck.lead.y + 1.5)
-        controls.target.lerp(lookGoal, Math.min(1, ddt * 8))
-        if (shake.value > 0) {
-          camera.position.x += (Math.random() - 0.5) * shake.value
-          camera.position.y += (Math.random() - 0.5) * shake.value * 0.6
-        }
-        controls.update()
-        return
-      }
-      poseAt(offsetBy(d.sKm, (d.dir === 0 ? 1 : -1) * (CAR_LEN * 1.5 + 1)), d.dir, pose)
-      if (cam === 'cab') {
-        // eye just ahead of the nose so the cab shell sits behind the camera
-        camGoal.copy(pose.pos).addScaledVector(pose.heading, 2.6).setY(pose.pos.y + 3.1)
-        lookGoal.copy(pose.pos).addScaledVector(pose.heading, 80).setY(pose.pos.y + 1.0)
-        camera.position.lerp(camGoal, Math.min(1, dt * 10))
-        controls.target.lerp(lookGoal, Math.min(1, dt * 10))
-      } else {
-        camGoal.copy(pose.pos).addScaledVector(pose.heading, -85).setY(pose.pos.y + 32)
-        lookGoal.copy(pose.pos).addScaledVector(pose.heading, 40).setY(pose.pos.y)
-        camera.position.lerp(camGoal, Math.min(1, dt * 4))
-        controls.target.lerp(lookGoal, Math.min(1, dt * 4))
-      }
-      controls.update()
-    }
+    // publish the lead car's pose for DriveCamera
+    const lead = group.current.children[0] as THREE.Group
+    rig.pos.copy(lead.position)
+    rig.heading.set(0, 0, 1).applyQuaternion(lead.quaternion).setY(0).normalize()
+    rig.speed = d.vMs
+    rig.wreckLead = d.phase === 'derailed' && wreck.ready ? wreck.lead : null
+    rig.valid = true
+
   })
 
   return (

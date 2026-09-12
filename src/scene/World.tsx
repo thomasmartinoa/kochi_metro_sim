@@ -17,6 +17,7 @@ import { CameraController } from './CameraController'
 import { City, Palms } from './City'
 import { CityGLB } from './CityGLB'
 import { DriveTrain } from './DriveTrain'
+import { DriveCamera } from './drive/DriveCamera'
 import { SpeedBoards } from './drive/SpeedBoards'
 import { wreck } from './drive/wreck'
 import { HorizonHaze } from './HorizonHaze'
@@ -93,6 +94,10 @@ function DevCam() {
       useSimStore.getState().select(kind && id ? { kind, id } : null)
     }
     w.__drive = () => useDriveStore.getState().drive
+    w.__driveView = (v: string) => useDriveStore.getState().setView(v as never)
+    w.__driveViewNow = () => useDriveStore.getState().view
+    w.__driveRestart = () => useDriveStore.getState().restart()
+    w.__controlsEnabled = () => (controls as { enabled?: boolean } | null)?.enabled
     w.__driveNotch = (n: number) => {
       const d = useDriveStore.getState().drive
       if (d) useDriveStore.getState().nudgeNotch(n - d.notch)
@@ -172,6 +177,7 @@ export function World() {
         <Line3D />
         <Trains />
         <DriveTrain />
+        <DriveCamera />
         <WreckGate />
         <SpeedBoards />
       </Suspense>

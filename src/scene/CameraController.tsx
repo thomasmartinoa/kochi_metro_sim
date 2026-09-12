@@ -38,6 +38,7 @@ import { firstLoad } from './firstLoad'
 interface ControlsLike {
   target: THREE.Vector3
   update: () => void
+  enabled: boolean
 }
 
 /* ============================================================================
@@ -268,8 +269,10 @@ export function CameraController() {
       return
     }
 
-    // drive mode owns the camera (see DriveTrain)
+    // drive mode owns the camera (see drive/DriveCamera), and switches the
+    // orbit controls off; give them back the moment we are not driving
     if (store.appMode === 'drive') return
+    controls.enabled = true
 
     // --- 1. keyboard flight, which overrides everything automated ----------
     if (keys.current.size > 0) {

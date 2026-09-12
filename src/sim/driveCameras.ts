@@ -87,13 +87,19 @@ const leftOf = (h: Vector3) => new Vector3(h.z, 0, -h.x)
 
 // --- the views ------------------------------------------------------------
 
-const CAB = { ahead: 2.6, up: 3.1, look: 80, lookUp: 1.0, fov: 62 }
+/**
+ * The rig's `pos` is the LEAD CAR'S CENTRE; the cab is at its far end, half a
+ * car (9.3 m) ahead. Every on-body view measures from there. (The first cut
+ * measured from the centre and looked down the saloon at the gangway.)
+ */
+const NOSE_AHEAD_M = 9.3
+const CAB = { ahead: NOSE_AHEAD_M - 1.4, up: 3.1, look: 80, lookUp: 1.0, fov: 62 }
 const CHASE = { back: 85, up: 32, look: 40, fov: DEFAULT_FOV }
 const CHASE_FAR = { back: 220, up: 90, look: 60, fov: DEFAULT_FOV }
 /** a dolly pacing the train beside the track, the "GoPro on a car alongside" shot */
 const SIDE = { out: 22, up: 3, ahead: 6, fov: 55 }
-const NOSE = { ahead: 9.2, up: 1.6, look: 120, fov: 80 }
-const ROOF = { back: 2, up: 4.4, look: 90, fov: 78 }
+const NOSE = { ahead: NOSE_AHEAD_M + 0.3, up: 1.6, look: 120, fov: 80 }
+const ROOF = { back: -NOSE_AHEAD_M + 4, up: 4.4, look: 90, fov: 78 }
 /** a static camera planted ahead beside the track; re-planted once the train has passed it */
 const TRACKSIDE = { plantAhead: 70, passedBy: 40, out: 9, up: 2.2, fov: 45 }
 const DRONE = { r: 60, h: 150, rate: 0.12, fov: 55 }

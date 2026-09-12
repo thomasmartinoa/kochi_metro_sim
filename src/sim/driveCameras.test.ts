@@ -76,5 +76,9 @@ describe('drive cameras', () => {
     expect(p.eye.y).toBeGreaterThan(14.8 + 1.5)
     expect(p.eye.y).toBeLessThan(14.8 + 4)
     expect(p.fov).toBeGreaterThanOrEqual(60)
+    // the rig is the lead car's CENTRE; the cab is at its far end, ~9 m ahead,
+    // so the eye must be well forward of the centre -- not mid-saloon
+    expect(p.eye.z - 2000).toBeGreaterThan(6)
+    expect(p.eye.z - 2000).toBeLessThan(9.3)
   })
 })

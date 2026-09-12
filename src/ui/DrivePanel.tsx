@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 import { stations } from '../data/network'
 import { A_LAT_WARN, brakingDistanceM, grade, LINE_SPEED_KMH, NOTCH_MAX, NOTCH_MIN } from '../sim/drive'
+import { VIEW_LABEL, VIEWS } from '../sim/driveCameras'
 import { useDriveStore } from '../state/useDriveStore'
 
 function StartScreen() {
@@ -33,9 +34,9 @@ function StartScreen() {
         </button>
       </div>
       <div className="font-mono text-[11px] leading-relaxed text-paper-dim">
-        W / ↑ power · S / ↓ brake
+        W / ↑ power · S / ↓ brake · Space emergency
         <br />
-        Space emergency · C cab / chase view
+        C / V next / previous view · 1-9 pick a view
       </div>
     </div>
   )
@@ -46,8 +47,8 @@ export function DrivePanel() {
   const exit = useDriveStore((s) => s.exit)
   const restart = useDriveStore((s) => s.restart)
   const nudgeNotch = useDriveStore((s) => s.nudgeNotch)
-  const toggleCam = useDriveStore((s) => s.toggleCam)
-  const cam = useDriveStore((s) => s.cam)
+  const view = useDriveStore((s) => s.view)
+  const setView = useDriveStore((s) => s.setView)
 
   // rerender at 10 Hz while driving (physics lives outside react)
   const [, force] = useState(0)
@@ -245,13 +246,21 @@ export function DrivePanel() {
             </div>
           )}
 
-          <div className="flex justify-between">
-            <button
-              onClick={toggleCam}
-              className="rounded px-2 py-0.5 font-mono text-[11px] text-paper-dim hover:bg-panel hover:text-paper"
-            >
-              view: {cam}
-            </button>
+          <div className="flex flex-wrap gap-1">
+            {VIEWS.map((v, i) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                title={`${VIEW_LABEL[v]} (${i + 1})`}
+                className={`rounded px-2 py-0.5 font-mono text-[10px] ${
+                  view === v ? 'bg-kmrl text-ink' : 'text-paper-dim hover:bg-panel hover:text-paper'
+                }`}
+              >
+                {VIEW_LABEL[v]}
+              </button>
+            ))}
+          </div>
+          <div className="flex justify-end">
             <button
               onClick={exit}
               className="rounded px-2 py-0.5 font-mono text-[11px] text-paper-dim hover:bg-panel hover:text-paper"
