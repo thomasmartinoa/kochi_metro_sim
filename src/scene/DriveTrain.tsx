@@ -13,6 +13,7 @@ import { VIEWS } from '../sim/driveCameras'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { CarModel, useCarParts } from './MetroTrain'
+import { groundDim } from './TileGround'
 import { replay } from './drive/replay'
 import { rig } from './drive/rig'
 import { wreck } from './drive/wreck'
@@ -41,9 +42,22 @@ export function DriveTrain() {
       )
     }
     const onKey = (e: KeyboardEvent) => {
-      const { drive, nudgeNotch, emergency, cycleView, setView } = useDriveStore.getState()
+      const { drive, nudgeNotch, emergency, cycleView, setView, doors, horn, toggleHeadlights } =
+        useDriveStore.getState()
       if (!drive || e.repeat || formFocused()) return
       switch (e.key) {
+        case 'o':
+        case 'O':
+          doors()
+          break
+        case 'h':
+        case 'H':
+          horn()
+          break
+        case 'l':
+        case 'L':
+          toggleHeadlights()
+          break
         case 'w':
         case 'W':
         case 'ArrowUp':
@@ -183,6 +197,22 @@ export function DriveTrain() {
     rig.wreckLead = d.phase === 'derailed' && wreck.ready ? wreck.lead : null
     rig.valid = true
 
+    // headlights: the driver's switch, or automatically once the sun is low
+    const auto = groundDim.value < 0.55
+    const lightsOn = useDriveStore.getState().headlights || auto
+    const lamp = group.current.children[3] as THREE.SpotLight | undefined
+    if (lamp) {
+      lamp.visible = lightsOn && d.phase !== 'derailed'
+      if (lamp.visible) {
+        const lead0 = group.current.children[0] as THREE.Group
+        // mounted low on the nose, aimed down the line
+        lamp.position.copy(lead0.position).addScaledVector(rig.heading, 9.4).setY(lead0.position.y + 1.2)
+        lamp.target.position.copy(lamp.position).addScaledVector(rig.heading, 60).setY(lead0.position.y + 0.2)
+        lamp.target.updateMatrixWorld()
+      }
+    }
+
+
   })
 
   return (
@@ -196,6 +226,16 @@ export function DriveTrain() {
       <group name="drive-car">
         <CarModel slot={2} parts={carParts} />
       </group>
+      {/* children[3]: the headlight, placed on the nose each frame */}
+      <spotLight
+        visible={false}
+        color="#FFF3D6"
+        intensity={2200}
+        distance={140}
+        angle={0.32}
+        penumbra={0.55}
+        decay={1.6}
+      />
     </group>
   )
 }

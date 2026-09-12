@@ -19,6 +19,7 @@ import { CityGLB } from './CityGLB'
 import { DriveTrain } from './DriveTrain'
 import { DriveCamera } from './drive/DriveCamera'
 import { ReplayTrain } from './drive/ReplayTrain'
+import { CabSounds } from './drive/CabSounds'
 import { SpeedBoards } from './drive/SpeedBoards'
 import { replay } from './drive/replay'
 import { wreck } from './drive/wreck'
@@ -95,6 +96,7 @@ function DevCam() {
     w.__select = (kind: 'train' | 'station' | null, id?: string) => {
       useSimStore.getState().select(kind && id ? { kind, id } : null)
     }
+    w.__setDaySec = (s: number) => useSimStore.getState().scrubToDaySec(s)
     w.__drive = () => useDriveStore.getState().drive
     w.__driveView = (v: string) => useDriveStore.getState().setView(v as never)
     w.__driveViewNow = () => useDriveStore.getState().view
@@ -184,6 +186,7 @@ export function World() {
         <DriveTrain />
         <DriveCamera />
         <ReplayTrain />
+        <CabSounds />
         <WreckGate />
         <SpeedBoards />
       </Suspense>

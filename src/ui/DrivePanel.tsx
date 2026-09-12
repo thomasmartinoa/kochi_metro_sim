@@ -37,6 +37,8 @@ function StartScreen() {
       <div className="font-mono text-[11px] leading-relaxed text-paper-dim">
         W / ↑ power · S / ↓ brake · Space emergency
         <br />
+        O doors · H horn · L headlights
+        <br />
         C / V next / previous view · 1-9 pick a view
       </div>
     </div>
@@ -52,6 +54,8 @@ export function DrivePanel() {
   const nudgeNotch = useDriveStore((s) => s.nudgeNotch)
   const view = useDriveStore((s) => s.view)
   const setView = useDriveStore((s) => s.setView)
+  const doors = useDriveStore((s) => s.doors)
+  const horn = useDriveStore((s) => s.horn)
 
   // rerender at 10 Hz while driving (physics lives outside react)
   const [, force] = useState(0)
@@ -109,13 +113,40 @@ export function DrivePanel() {
           </div>
           <div className="font-mono text-3xl font-semibold text-lemon">{drive.score}</div>
           <div className="font-display text-sm text-paper">{grade(drive.score, nStops)}</div>
+          <div className="grid grid-cols-3 gap-2 font-mono text-[11px]">
+            <div className="rounded-md bg-panel/70 px-2 py-1.5">
+              <div className="text-paper-dim">STOPS</div>
+              <div className="text-sm text-paper">
+                {drive.stops.reduce((a, s) => a + s.points, 0)}
+              </div>
+            </div>
+            <div className="rounded-md bg-panel/70 px-2 py-1.5">
+              <div className="text-paper-dim">ON TIME</div>
+              <div className="text-sm text-paper">
+                {drive.stops.reduce((a, s) => a + (s.punctualityPoints ?? 0), 0)}
+              </div>
+            </div>
+            <div className="rounded-md bg-panel/70 px-2 py-1.5">
+              <div className="text-paper-dim">COMFORT</div>
+              <div className="text-sm text-paper">{Math.round(drive.comfort)}%</div>
+            </div>
+          </div>
           <div className="max-h-36 overflow-y-auto font-mono text-[11px] leading-relaxed text-paper-dim">
             {drive.stops.map((s, i) => (
-              <div key={i} className="flex justify-between">
-                <span>{stations[s.stationOrder].name}</span>
-                <span className={s.points > 0 ? 'text-kmrl' : 'text-pinkline'}>
-                  {s.label} {s.points > 0 ? '+' : ''}
-                  {s.points}
+              <div key={i} className="flex justify-between gap-2">
+                <span className="truncate">{stations[s.stationOrder].name}</span>
+                <span className="shrink-0">
+                  <span className={s.points > 0 ? 'text-kmrl' : 'text-pinkline'}>
+                    {s.label} {s.points > 0 ? '+' : ''}
+                    {s.points}
+                  </span>
+                  {s.lateSec !== undefined && (
+                    <span className={Math.abs(s.lateSec) <= 30 ? 'text-paper-dim' : 'text-lemon'}>
+                      {' '}
+                      · {s.lateSec > 0 ? '+' : ''}
+                      {Math.round(s.lateSec)}s
+                    </span>
+                  )}
                 </span>
               </div>
             ))}
@@ -233,15 +264,62 @@ export function DrivePanel() {
             </div>
           )}
 
+          {drive.doorsOpen && (
+            <div className="rounded-md bg-panel/70 px-3 py-2">
+              <div className="flex items-baseline justify-between">
+                <span className="font-display text-[11px] tracking-wide text-paper-dim">
+                  DOORS OPEN · {Math.floor(drive.dwellRemainSec)}s
+                </span>
+                <span className="font-mono text-[11px] text-paper-dim">
+                  {drive.boarding
+                    ? drive.boarding.done
+                      ? 'boarding complete'
+                      : drive.boarding.alighting > 0
+                        ? `${Math.ceil(drive.boarding.alighting)} alighting`
+                        : `${Math.ceil(drive.boarding.waiting)} boarding`
+                    : 'ready to depart'}
+                </span>
+              </div>
+              {drive.boarding && !drive.boarding.done && (
+                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-panel">
+                  <div
+                    className="h-full rounded-full bg-kmrl transition-[width] duration-200"
+                    style={{
+                      width: `${Math.round(
+                        100 * (1 - (drive.boarding.alighting + drive.boarding.waiting) / Math.max(1, drive.boarding.total)),
+                      )}%`,
+                    }}
+                  />
+                </div>
+              )}
+              <button
+                onClick={doors}
+                className={`mt-2 w-full rounded-md py-1.5 font-display text-sm font-bold ${
+                  drive.boarding?.done !== false ? 'bg-kmrl text-ink' : 'bg-lemon/85 text-ink'
+                }`}
+              >
+                {drive.boarding?.done !== false ? 'CLOSE DOORS · O' : 'CLOSE DOORS EARLY · O'}
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <span className="font-display text-[11px] text-paper-dim">
-              {drive.doorsOpen
-                ? `DOORS OPEN ${Math.ceil(drive.dwellRemainSec)}s`
-                : drive.phase === 'ready'
-                  ? 'APPLY POWER TO DEPART'
-                  : ''}
+              {drive.doorsOpen ? '' : drive.phase === 'ready' ? 'APPLY POWER TO DEPART' : ''}
+              {!drive.doorsOpen && drive.phase === 'dwell' ? 'DOORS CLOSED · APPLY POWER' : ''}
             </span>
-            <span className="font-mono text-sm font-semibold text-lemon">{drive.score}</span>
+            <span className="flex items-center gap-3">
+              <button
+                onClick={horn}
+                title="Horn (H)"
+                className="rounded px-2 py-0.5 font-mono text-[11px] text-paper-dim hover:bg-panel hover:text-paper"
+              >
+                horn
+              </button>
+              <span className="font-mono text-[11px] text-paper-dim" title="Passenger comfort">
+                {Math.round(drive.comfort)}%
+              </span>
+              <span className="font-mono text-sm font-semibold text-lemon">{drive.score}</span>
+            </span>
           </div>
 
           {lastStop && drive.phase === 'dwell' && (

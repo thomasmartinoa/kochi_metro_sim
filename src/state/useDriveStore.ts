@@ -1,6 +1,6 @@
 /** Drive-mode session state: physics state + camera view + keyboard intents. */
 import { create } from 'zustand'
-import { newDrive, restartFromLastStop, setNotch, stepDrive, type DriveState } from '../sim/drive'
+import { newDrive, restartFromLastStop, setNotch, stepDrive, toggleDoors, type DriveState } from '../sim/drive'
 import { VIEWS, type DriveView } from '../sim/driveCameras'
 
 export type { DriveView }
@@ -23,6 +23,12 @@ interface DriveStore {
   restart: () => void
   nudgeNotch: (delta: number) => void
   emergency: () => void
+  doors: () => void
+  /** wall-clock ms the horn was last sounded; the scene plays it */
+  hornAtMs: number
+  horn: () => void
+  headlights: boolean
+  toggleHeadlights: () => void
   setView: (v: DriveView) => void
   /** step through VIEWS; from the crash view, from the view before it */
   cycleView: (delta?: number) => void
@@ -70,6 +76,14 @@ export const useDriveStore = create<DriveStore>((set, get) => ({
     const d = get().drive
     if (d) set({ drive: setNotch(d, -5) })
   },
+  doors: () => {
+    const d = get().drive
+    if (d) set({ drive: toggleDoors(d) })
+  },
+  hornAtMs: 0,
+  horn: () => set({ hornAtMs: performance.now() }),
+  headlights: false,
+  toggleHeadlights: () => set((s) => ({ headlights: !s.headlights })),
   setView: (v) =>
     set((s) => ({ view: v, viewBeforeCrash: v === 'crash' ? s.view : s.viewBeforeCrash })),
   cycleView: (delta = 1) =>

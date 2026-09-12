@@ -13,6 +13,7 @@ import {
   restartFromLastStop,
   setNotch,
   stepDrive,
+  toggleDoors,
   type DriveEnv,
   type DriveState,
 } from './drive'
@@ -37,9 +38,14 @@ function run(st: DriveState, seconds: number, env: DriveEnv = STRAIGHT, dt = 0.0
   return s
 }
 
+/** A drive with the doors closed, as a driver would leave the platform. */
+function ready(dir: 0 | 1 = 0, env: DriveEnv = STRAIGHT): DriveState {
+  return toggleDoors(newDrive(dir, env))
+}
+
 describe('drive physics', () => {
   it('moves in real metres: full power from rest covers ~½at² along the drawn line', () => {
-    const start = newDrive(0, STRAIGHT)
+    const start = ready(0)
     let st = setNotch(start, 4)
     st = run(st, 10)
     // a = 1.0 m/s² at notch 4, minus a little drag: 45-50 m in 10 s
@@ -51,14 +57,14 @@ describe('drive physics', () => {
   })
 
   it('stays ready until first power notch', () => {
-    let st = newDrive(0, STRAIGHT)
+    let st = ready(0)
     st = run(st, 5)
     expect(st.phase).toBe('ready')
     expect(st.sKm).toBeCloseTo(stations[0].sKm, 5)
   })
 
   it('accelerates under power and moves toward the next station', () => {
-    let st = setNotch(newDrive(0, STRAIGHT), 4)
+    let st = setNotch(ready(0), 4)
     st = run(st, 20)
     expect(st.phase).toBe('run')
     expect(st.vMs).toBeGreaterThan(10)
@@ -66,7 +72,7 @@ describe('drive physics', () => {
   })
 
   it('never brakes for the driver: full power past 85 km/h keeps accelerating', () => {
-    let st = setNotch(newDrive(0, STRAIGHT), 4)
+    let st = setNotch(ready(0), 4)
     st = run(st, 30) // ~100 km/h by now on the synthetic straight
     expect(st.vMs * 3.6).toBeGreaterThan(85)
     const before = st.vMs
@@ -78,7 +84,7 @@ describe('drive physics', () => {
   })
 
   it('scores a stop at the station mark', () => {
-    let st = setNotch(newDrive(0, STRAIGHT), 4)
+    let st = setNotch(ready(0), 4)
     // drive most of the way to Pulinchodu (1.76 km leg), then brake to a stop on the mark
     let guard = 0
     while (st.phase === 'run' || st.phase === 'ready') {
@@ -95,7 +101,7 @@ describe('drive physics', () => {
   })
 
   it('penalises passing a station without stopping', () => {
-    let st = setNotch(newDrive(0, STRAIGHT), 4)
+    let st = setNotch(ready(0), 4)
     for (let t = 0; t < 180 && !st.stops.length; t += 0.05) {
       st = setNotch(st, 4) // driver holds power straight through Pulinchodu
       st = stepDrive(st, 0.05, STRAIGHT)
@@ -110,7 +116,7 @@ describe('drive physics', () => {
   })
 
   it('down direction decreases sKm', () => {
-    let st = setNotch(newDrive(1, STRAIGHT), 4)
+    let st = setNotch(ready(1), 4)
     st = run(st, 15)
     expect(st.sKm).toBeLessThan(stations[stations.length - 1].sKm)
     expect(st.nextStopOrder).toBe(stations.length - 2)
@@ -125,7 +131,7 @@ describe('derailment', () => {
   })
 
   it('a train under the limit takes the curve', () => {
-    let st = setNotch(newDrive(0, CURVE_100), 4)
+    let st = setNotch(ready(0, CURVE_100), 4)
     st = run(st, 14, CURVE_100) // ~49 km/h, still on the straight
     st = setNotch(st, 0)
     st = run(st, 90, CURVE_100) // coasts round the bend
@@ -135,7 +141,7 @@ describe('derailment', () => {
   })
 
   it('a train over the limit for longer than the hold time derails, with the record', () => {
-    let st = setNotch(newDrive(0, CURVE_100), 4)
+    let st = setNotch(ready(0, CURVE_100), 4)
     st = run(st, 50, CURVE_100) // ~130 km/h into the curve at 1000 m
     expect(st.phase).toBe('derailed')
     expect(st.derail).not.toBeNull()
@@ -154,7 +160,7 @@ describe('derailment', () => {
   it('a brief excursion over the limit with the brake on survives', () => {
     // hold just over the limit (16.3 m/s vs 16.1) to the curve mouth, then
     // emergency brake: a couple of tenths later the train is back under it
-    let st = setNotch(newDrive(0, CURVE_100), 4)
+    let st = setNotch(ready(0, CURVE_100), 4)
     let guard = 0
     while (st.gM < 1000 - MODEL_CAR_PITCH_M - 5 && guard++ < 20000) {
       st = setNotch(st, st.vMs < 16.3 ? 2 : 0)
@@ -167,7 +173,7 @@ describe('derailment', () => {
   })
 
   it('a derailed train no longer moves or scores', () => {
-    let st = setNotch(newDrive(0, CURVE_100), 4)
+    let st = setNotch(ready(0, CURVE_100), 4)
     st = run(st, 50, CURVE_100)
     expect(st.phase).toBe('derailed')
     const frozen = run(setNotch(st, 4), 5, CURVE_100)
@@ -183,7 +189,7 @@ describe('buffer stop and restart', () => {
     // is already 10 m past it under full power, the buffer is 60 m past it
     const last = stations.length - 1
     let st: DriveState = {
-      ...newDrive(0, STRAIGHT),
+      ...ready(0),
       nextStopOrder: last,
       lastStopOrder: last - 1,
       gM: stations[last].sKm * 1000 + 10,
@@ -197,7 +203,7 @@ describe('buffer stop and restart', () => {
     expect(st.derail!.lastStopOrder).toBe(last - 1)
 
     let slow: DriveState = {
-      ...newDrive(0, STRAIGHT),
+      ...ready(0),
       nextStopOrder: last,
       gM: stations[last].sKm * 1000 + 55,
       phase: 'run',
@@ -209,7 +215,7 @@ describe('buffer stop and restart', () => {
   })
 
   it('restarts at the last station with doors open, keeping the score and stops', () => {
-    let st = setNotch(newDrive(0, CURVE_100), 4)
+    let st = setNotch(ready(0, CURVE_100), 4)
     st = run(st, 50, CURVE_100)
     expect(st.phase).toBe('derailed')
     const again = restartFromLastStop(st, CURVE_100)
@@ -222,8 +228,8 @@ describe('buffer stop and restart', () => {
     expect(again.score).toBe(st.score)
     expect(again.stops).toBe(st.stops)
     expect(again.derail).toBeNull()
-    // and it can be driven again
-    const moving = run(setNotch(again, 4), 5, CURVE_100)
+    // and it can be driven again, once the doors are closed
+    const moving = run(setNotch(toggleDoors(again), 4), 5, CURVE_100)
     expect(moving.phase).toBe('run')
     expect(moving.gM).toBeGreaterThan(again.gM)
   })
@@ -231,7 +237,7 @@ describe('buffer stop and restart', () => {
 
 describe('curve lookahead', () => {
   it('reports the tightest restriction ahead and its distance, or nothing on open track', () => {
-    let st: DriveState = { ...newDrive(0, CURVE_100), gM: 700, phase: 'run', vMs: 10 }
+    let st: DriveState = { ...ready(0, CURVE_100), gM: 700, phase: 'run', vMs: 10 }
     st = stepDrive(st, 0.05, CURVE_100)
     expect(st.ahead).not.toBeNull()
     expect(Math.round(st.ahead!.limitKmh)).toBe(58)
@@ -240,12 +246,133 @@ describe('curve lookahead', () => {
     expect(st.ahead!.distM).toBeLessThan(1000 - 700 - MODEL_CAR_PITCH_M + 20)
     expect(st.ahead!.distM).toBeLessThanOrEqual(LOOKAHEAD_M)
 
-    let open: DriveState = { ...newDrive(0, CURVE_100), gM: 100, phase: 'run', vMs: 10 }
+    let open: DriveState = { ...ready(0, CURVE_100), gM: 100, phase: 'run', vMs: 10 }
     open = stepDrive(open, 0.05, CURVE_100)
     expect(open.ahead).toBeNull()
 
-    let inside: DriveState = { ...newDrive(0, CURVE_100), gM: 1200, phase: 'run', vMs: 10 }
+    let inside: DriveState = { ...ready(0, CURVE_100), gM: 1200, phase: 'run', vMs: 10 }
     inside = stepDrive(inside, 0.05, CURVE_100)
     expect(inside.ahead!.distM).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------- 6d ----
+
+/** drive to Pulinchodu and stop on the mark; returns the state at the moment of the stop */
+function stopAtPulinchodu(env: DriveEnv = STRAIGHT): DriveState {
+  let st = setNotch(ready(0, env), 4)
+  let guard = 0
+  while ((st.phase === 'run' || st.phase === 'ready') && guard++ < 20000) {
+    const need = brakingDistanceM(st.vMs)
+    st = setNotch(st, st.distToNextM <= need + 2 && st.phase === 'run' ? -4 : 4)
+    st = stepDrive(st, 0.05, env)
+  }
+  expect(st.phase).toBe('dwell')
+  return st
+}
+
+describe('doors', () => {
+  it('open on arrival, and the train will not take power until they are closed', () => {
+    let st = stopAtPulinchodu()
+    expect(st.doorsOpen).toBe(true)
+    st = run(setNotch(st, 4), 3)
+    expect(st.vMs).toBe(0)
+    expect(st.phase).toBe('dwell')
+  })
+
+  it('the driver closes them; only then does power move the train', () => {
+    let st = stopAtPulinchodu()
+    st = run(st, 12) // boarding done
+    st = toggleDoors(st)
+    expect(st.doorsOpen).toBe(false)
+    st = run(setNotch(st, 4), 3)
+    expect(st.phase).toBe('run')
+    expect(st.vMs).toBeGreaterThan(0)
+  })
+
+  it('cannot be opened while moving', () => {
+    let st = run(setNotch(ready(0), 4), 5)
+    expect(st.doorsOpen).toBe(false)
+    st = toggleDoors(st)
+    expect(st.doorsOpen).toBe(false)
+  })
+})
+
+describe('boarding', () => {
+  it('passengers alight then board while the doors are open, and a chime marks the end', () => {
+    let st = stopAtPulinchodu()
+    expect(st.boarding).not.toBeNull()
+    const b0 = st.boarding!
+    expect(b0.alighting + b0.waiting).toBeGreaterThan(0)
+    expect(b0.done).toBe(false)
+    st = run(st, 2)
+    expect(st.boarding!.alighting).toBeLessThan(b0.alighting)
+    // the chime is a one-step flag, set on the step boarding completes and
+    // cleared on the next: catch that step
+    let chimed = 0
+    for (let t = 0; t < 30 && !st.boarding!.done; t += 0.05) {
+      st = stepDrive(st, 0.05, STRAIGHT)
+      if (st.chime) chimed++
+    }
+    expect(st.boarding!.done).toBe(true)
+    expect(st.boarding!.waiting).toBe(0)
+    expect(chimed).toBe(1)
+    st = stepDrive(st, 0.05, STRAIGHT)
+    expect(st.chime).toBe(false)
+  })
+
+  it('closing the doors early strands the rest and costs 20 a head', () => {
+    let st = stopAtPulinchodu()
+    const before = st.score
+    st = run(st, 1)
+    const waiting = st.boarding!.waiting
+    expect(waiting).toBeGreaterThan(0)
+    st = toggleDoors(st)
+    expect(st.boarding!.stranded).toBe(waiting)
+    expect(st.score).toBe(before - 20 * waiting)
+  })
+
+  it('a heavier train pulls away a little slower', () => {
+    const light: DriveState = { ...ready(0), load: 0.05 }
+    const heavy: DriveState = { ...ready(0), load: 1.0 }
+    const a = run(setNotch(light, 4), 10)
+    const b = run(setNotch(heavy, 4), 10)
+    expect(b.vMs).toBeLessThan(a.vMs)
+    expect(b.vMs).toBeGreaterThan(a.vMs * 0.85)
+  })
+})
+
+describe('comfort', () => {
+  it('a notch change at speed costs comfort, scaled by the change; at rest it is free', () => {
+    let st = setNotch(ready(0), 1)
+    st = stepDrive(st, 0.05, STRAIGHT) // at rest → run, no charge
+    const c0 = st.comfort
+    st = run(st, 8) // moving now
+    st = setNotch(st, 4) // +3 notches at speed
+    expect(st.comfort).toBeLessThan(c0)
+    const oneStep = c0 - setNotch(run(setNotch(ready(0), 1), 8), 2).comfort
+    const threeSteps = c0 - st.comfort
+    expect(threeSteps).toBeGreaterThan(oneStep)
+    // a careful full run (~100 lever moves at line speed) keeps most of its comfort
+    expect(100 - 100 * 0.5).toBeGreaterThan(40)
+  })
+
+  it('taking a curve in the warning band bleeds comfort over time', () => {
+    let st: DriveState = { ...ready(0, CURVE_100), gM: 990, phase: 'run', vMs: 14.5 } // ~2.1 m/s² on the 100 m curve
+    const c0 = st.comfort
+    st = run(st, 3, CURVE_100)
+    expect(st.comfort).toBeLessThan(c0)
+  })
+})
+
+describe('punctuality', () => {
+  it('each stop is scored against a schedule rebased to the first power notch', () => {
+    const st = stopAtPulinchodu()
+    const last = st.stops[st.stops.length - 1]
+    expect(typeof last.lateSec).toBe('number')
+    expect(Number.isFinite(last.lateSec)).toBe(true)
+    // a run that stops promptly is early or near on time, never wildly late
+    expect(Math.abs(last.lateSec!)).toBeLessThan(300)
+    expect(typeof last.punctualityPoints).toBe('number')
   })
 })

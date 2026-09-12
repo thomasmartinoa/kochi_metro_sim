@@ -10,7 +10,7 @@
  * The line itself comes in through `DriveEnv`, so tests run on synthetic
  * track and the real alignment is just one environment.
  */
-import { stations } from '../data/network'
+import { stations, trips } from '../data/network'
 import { MODEL_CAR_PITCH_M, TRAINSET } from '../data/trainset'
 import { curvatureAtG, gAt, sAtG } from './alignment'
 
@@ -30,8 +30,25 @@ const DERAIL_PENALTY = 1000
 /** how far ahead of the leading car the HUD looks for the next restriction */
 export const LOOKAHEAD_M = 400
 const LOOKAHEAD_STEP_M = 10
-const DWELL_SEC = 10
 const STOP_TOLERANCE_M = 5
+/** passengers through one door per second, alighting or boarding */
+const DOOR_RATE_PPS = 1.4
+/** points per passenger left on the platform when the doors close early */
+const STRANDED_PENALTY = 20
+/** a full train is this much slower to accelerate than an empty one */
+const LOAD_ACCEL_PENALTY = 0.12
+/**
+ * Comfort lost per notch step changed while moving, at line speed. Sized so
+ * a careful driver -- four or five lever moves a station, ~100 over the
+ * line -- ends with most of the 100, and one who hunts the lever every
+ * second does not.
+ */
+const JERK_COST = 0.5
+/** comfort lost per second per m/s² of lateral acceleration above the warning band */
+const LATERAL_COST_PER_S = 8
+/** punctuality: points at the mark for on time, falling to zero at this many seconds off */
+const PUNCTUAL_MAX = 100
+const PUNCTUAL_ZERO_S = 90
 /** run-out past a terminal before the buffer stop */
 const BUFFER_PAD_M = 60
 
@@ -105,6 +122,22 @@ export interface StopResult {
   errM: number
   points: number
   label: string
+  /** seconds late against the run's schedule (negative = early) */
+  lateSec?: number
+  punctualityPoints?: number
+}
+
+/** The platform exchange while the doors are open. */
+export interface Boarding {
+  /** still to get off */
+  alighting: number
+  /** still to get on */
+  waiting: number
+  /** alighting + waiting when the doors opened, for a progress bar */
+  total: number
+  done: boolean
+  /** left behind when the doors closed early */
+  stranded: number
 }
 
 export interface DriveState {
@@ -118,7 +151,21 @@ export interface DriveState {
   notch: number
   phase: DrivePhase
   doorsOpen: boolean
+  /** seconds the doors have been open at this platform */
   dwellRemainSec: number
+  boarding: Boarding | null
+  /** true for the one step on which boarding completed (the cab chime) */
+  chime: boolean
+  /** 0..1 how full the train is */
+  load: number
+  /** 0..100, passengers' ride comfort so far */
+  comfort: number
+  /** schedule for this run: arrival at each station order, seconds after first power */
+  schedule: Record<number, number> | null
+  /** seconds since first power, the run's clock */
+  runS: number
+  /** runS at the last notch change, for the jerk rule */
+  lastNotchAtS: number
   /** order index of the next station to stop at */
   nextStopOrder: number
   /** real metres to the next stop's mark (negative once passed) */
@@ -149,6 +196,13 @@ export function newDrive(dir: 0 | 1, env: DriveEnv = REAL_ENV): DriveState {
     phase: 'ready',
     doorsOpen: true,
     dwellRemainSec: 0,
+    boarding: null,
+    chime: false,
+    load: 0.35,
+    comfort: 100,
+    schedule: null,
+    runS: 0,
+    lastNotchAtS: -1,
     nextStopOrder: dir === 0 ? 1 : stations.length - 2,
     distToNextM: 0,
     score: 0,
@@ -186,26 +240,45 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
 
   if (st.phase === 'done' || st.phase === 'derailed') return st
 
-  if (st.phase === 'dwell') {
-    st.dwellRemainSec -= dt
-    if (st.dwellRemainSec <= 0) {
-      st.doorsOpen = false
-      st.phase = 'run'
-      st.notch = 0
+  st.chime = false
+  if (st.phase === 'dwell' || st.phase === 'ready') {
+    if (st.startedAtMs !== null) st.runS += dt
+    if (st.doorsOpen) {
+      // the platform exchange, at DOOR_RATE_PPS per door; alight first, then board
+      st.dwellRemainSec += dt
+      if (st.boarding && !st.boarding.done) {
+        const b = { ...st.boarding }
+        let budget = DOOR_RATE_PPS * TRAINSET.doorsPerSidePerCar * TRAINSET.cars * dt
+        const off = Math.min(b.alighting, budget)
+        b.alighting -= off
+        budget -= off
+        const on = Math.min(b.waiting, budget)
+        b.waiting -= on
+        if (b.alighting < 1e-6 && b.waiting < 1e-6) {
+          b.alighting = 0
+          b.waiting = 0
+          b.done = true
+          st.chime = true
+        }
+        st.boarding = b
+      }
+      // doors open: no traction, whatever the notch says
+      return st
     }
-    return st
-  }
-
-  if (st.phase === 'ready') {
-    // waiting for first power notch
+    // doors closed and a power notch: away we go
     if (st.notch > 0) {
+      if (st.phase === 'ready') {
+        st.startedAtMs = Date.now()
+        st.schedule = scheduleFor(st.dir, st.lastStopOrder)
+        st.runS = 0
+      }
       st.phase = 'run'
-      st.doorsOpen = false
-      st.startedAtMs = Date.now()
+      st.boarding = null
     } else {
       return st
     }
   }
+  st.runS += dt
 
   // --- physics ---
   // Line speed is a rule, not a governor: the driver may break it, and the
@@ -213,7 +286,9 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
   st.overspeed = kmh(st.vMs) > LINE_SPEED_KMH
 
   let a = 0
-  if (st.notch > 0) a = (st.notch / NOTCH_MAX) * TRAINSET.accelMs2
+  // a full train is a heavier one: a shade slower to pull away
+  const massFactor = 1 - LOAD_ACCEL_PENALTY * st.load
+  if (st.notch > 0) a = (st.notch / NOTCH_MAX) * TRAINSET.accelMs2 * massFactor
   else if (st.notch === -5) a = -TRAINSET.emergencyBrakeMs2
   else if (st.notch < 0) a = (st.notch / 4) * TRAINSET.brakeMs2
   a -= 0.004 * st.vMs // rolling/air drag
@@ -229,6 +304,10 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
   const kappa = env.curvatureAtG(leadG)
   st.lateralMs2 = st.vMs * st.vMs * Math.abs(kappa)
   st.ahead = restrictionAhead(leadG, st.dir, env)
+  // riding a curve in the warning band is uncomfortable, and stays so
+  if (st.lateralMs2 > A_LAT_WARN) {
+    st.comfort = Math.max(0, st.comfort - LATERAL_COST_PER_S * (st.lateralMs2 - A_LAT_WARN) * dt)
+  }
   st.overLimitS = st.lateralMs2 > A_LAT_DERAIL ? st.overLimitS + dt : 0
   if (st.overLimitS >= DERAIL_HOLD_S) {
     return derailed(st, env, {
@@ -266,16 +345,30 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
   if (st.vMs === 0 && st.phase === 'run' && Math.abs(distM) <= 38 && prev.vMs > 0) {
     // came to a stop near the mark -> platform stop
     const { points, label } = scoreStop(distM)
-    st.stops = [...st.stops, { stationOrder: target.order, errM: distM, points, label }]
-    st.score += points
+    const due = st.schedule?.[target.order]
+    const lateSec = due === undefined ? undefined : st.runS - due
+    const punctualityPoints =
+      lateSec === undefined
+        ? 0
+        : Math.round(PUNCTUAL_MAX * Math.max(0, 1 - Math.abs(lateSec) / PUNCTUAL_ZERO_S))
+    st.stops = [
+      ...st.stops,
+      { stationOrder: target.order, errM: distM, points, label, lateSec, punctualityPoints },
+    ]
+    st.score += points + punctualityPoints
     st.lastStopOrder = target.order
+    st.doorsOpen = true
+    st.dwellRemainSec = 0
+    st.boarding = exchangeAt(target.order, st.load)
+    // the exchange sets the new load: everyone waiting will get on
+    st.load = Math.min(
+      1,
+      Math.max(0.05, st.load - st.boarding.alighting / TRAINSET.capacity + st.boarding.waiting / TRAINSET.capacity),
+    )
     if (isTerminal) {
       st.phase = 'done'
-      st.doorsOpen = true
     } else {
       st.phase = 'dwell'
-      st.doorsOpen = true
-      st.dwellRemainSec = DWELL_SEC
       st.nextStopOrder += st.dir === 0 ? 1 : -1
     }
     return st
@@ -328,6 +421,8 @@ export function restartFromLastStop(st: DriveState, env: DriveEnv = REAL_ENV): D
     phase: 'ready',
     doorsOpen: true,
     dwellRemainSec: 0,
+    boarding: null,
+    chime: false,
     nextStopOrder: order + (st.dir === 0 ? 1 : -1),
     distToNextM: 0,
     lateralMs2: 0,
@@ -337,8 +432,71 @@ export function restartFromLastStop(st: DriveState, env: DriveEnv = REAL_ENV): D
   }
 }
 
+/** notch changes closer together than this are one lever movement, charged once */
+const LEVER_MOVE_S = 0.4
+
 export function setNotch(st: DriveState, notch: number): DriveState {
-  return { ...st, notch: Math.max(NOTCH_MIN, Math.min(NOTCH_MAX, notch)) }
+  const next = Math.max(NOTCH_MIN, Math.min(NOTCH_MAX, notch))
+  if (next === st.notch) return st
+  // a notch change while moving is a jerk the passengers feel, more at speed;
+  // a lever swept through several notches in one go is one jerk, not several
+  const steps = Math.abs(next - st.notch)
+  const atSpeed = st.vMs > 0.5 ? Math.min(1, kmh(st.vMs) / LINE_SPEED_KMH) : 0
+  const sameMove = st.runS - st.lastNotchAtS < LEVER_MOVE_S
+  const comfort = sameMove ? st.comfort : Math.max(0, st.comfort - JERK_COST * steps * atSpeed)
+  return { ...st, notch: next, comfort, lastNotchAtS: st.runS }
+}
+
+/** Open or close the doors. Only at rest; closing early strands whoever is still on the platform. */
+export function toggleDoors(st: DriveState): DriveState {
+  if (st.vMs > 0 || (st.phase !== 'dwell' && st.phase !== 'ready' && st.phase !== 'done')) return st
+  if (st.doorsOpen) {
+    const b = st.boarding
+    const stranded = b && !b.done ? Math.ceil(b.waiting) : 0
+    return {
+      ...st,
+      doorsOpen: false,
+      score: st.score - STRANDED_PENALTY * stranded,
+      boarding: b ? { ...b, alighting: 0, waiting: 0, done: true, stranded } : null,
+    }
+  }
+  return { ...st, doorsOpen: true }
+}
+
+/**
+ * Who gets off and who is waiting at a platform, from the engine's occupancy
+ * shape: busiest around the city centre, and the platform has been filling
+ * since the last train.
+ */
+function exchangeAt(order: number, load: number): Boarding {
+  const s = stations[order].sKm
+  const centre = 1 - Math.abs(s - 16) / 22 // same shape as the engine's occupancyAt
+  const cap = TRAINSET.capacity
+  const alighting = Math.round(load * cap * (0.25 + 0.35 * centre))
+  const waiting = Math.round(cap * 0.12 * (0.4 + centre))
+  return { alighting, waiting, total: alighting + waiting, done: false, stranded: 0 }
+}
+
+/**
+ * The run's schedule: the real timetable's inter-station running times for
+ * this direction, rebased so each station is due the timetable's run time
+ * after the moment power is first applied at `fromOrder`. Keyed by station
+ * order, seconds since first power.
+ */
+function scheduleFor(dir: 0 | 1, fromOrder: number): Record<number, number> {
+  const trip =
+    trips.find((t) => t.dir === dir && t.stops.length === stations.length) ??
+    trips.find((t) => t.dir === dir)
+  const out: Record<number, number> = {}
+  if (!trip) return out
+  const at = trip.stops.find(([o]) => o === fromOrder)
+  if (!at) return out
+  const dep0 = at[2]
+  for (const [o, arr] of trip.stops) {
+    const ahead = dir === 0 ? o > fromOrder : o < fromOrder
+    if (ahead) out[o] = arr - dep0
+  }
+  return out
 }
 
 /** braking distance from current speed at full service brake (for the HUD) */
