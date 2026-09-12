@@ -83,8 +83,14 @@ for (const name of ASSETS) {
   // different colours into adjacent texels of a tiny image — where lossy
   // texture compression bleeds the black underframe straight into the white
   // bodywork, which is what turned the trainset dark.
+  // The cab keeps its hierarchy: the lever, the screens and the buttons are
+  // live objects in drive mode, so nothing may be joined; and its screens
+  // carry no texture, so the attribute prune would throw their UVs away.
+  const cab = name === 'metro-cockpit'
+  if (cab) run(process.execPath, [join(ROOT, 'scripts/strip-extra-uvs.mjs'), webp])
   gltf(['optimize', webp, out, '--compress', 'draco',
-    '--texture-compress', 'false', '--simplify', 'false', '--palette', 'false'])
+    '--texture-compress', 'false', '--simplify', 'false', '--palette', 'false',
+    ...(cab ? ['--join', 'false', '--flatten', 'false', '--prune-attributes', 'false'] : [])])
   console.log(`  -> ${name}.glb ${mb(out)} MB`)
 }
 

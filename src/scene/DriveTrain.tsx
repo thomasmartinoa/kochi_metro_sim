@@ -10,6 +10,7 @@ import * as THREE from 'three'
 import { MODEL_CAR_PITCH_M } from '../data/trainset'
 import { carPoseAt, curvatureAtG, gAt, sAtG, trackOffsetBy } from '../sim/alignment'
 import { VIEWS } from '../sim/driveCameras'
+import { Cockpit } from './drive/Cockpit'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { CarModel, useCarParts } from './MetroTrain'
@@ -20,6 +21,12 @@ import { wreck } from './drive/wreck'
 
 const CAR_LEN = MODEL_CAR_PITCH_M
 let keysBound = false
+/**
+ * The leading car model carries a joined copy of the cab interior; drive mode
+ * draws the live Cockpit there instead. The nose shell and the cab's outer
+ * skin (Cockpit_Component_001) stay.
+ */
+const BAKED_CAB = /^(Cockpit_(Component_0(45|47|52)|Control_Button|Display_Screen|Radio_Panel)|Driver_Seat|Bogie_Frame_Assembly)/
 
 
 export function DriveTrain() {
@@ -81,8 +88,8 @@ export function DriveTrain() {
           cycleView(-1)
           break
         default:
-          if (/^[1-9]$/.test(e.key)) {
-            const v = VIEWS[Number(e.key) - 1]
+          if (/^[0-9]$/.test(e.key)) {
+            const v = VIEWS[e.key === '0' ? 9 : Number(e.key) - 1]
             if (v) setView(v)
           }
       }
@@ -229,7 +236,8 @@ export function DriveTrain() {
   return (
     <group ref={group} name="drive-train" visible={false}>
       <group name="drive-car">
-        <CarModel slot={0} parts={carParts} />
+        <CarModel slot={0} parts={carParts} hide={BAKED_CAB} />
+        <Cockpit />
       </group>
       <group name="drive-car">
         <CarModel slot={1} parts={carParts} />

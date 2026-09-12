@@ -11,11 +11,13 @@ import { newCamMemory, seedCrashFrom, viewCamera, type DriveView } from '../../s
 import { useDriveStore } from '../../state/useDriveStore'
 import { useSimStore } from '../../state/useSimStore'
 import { rig } from './rig'
+import { cockpitGrab } from './Cockpit'
 import { shake } from './wreck'
 
 const MAX_DT = 1 / 30
 /** how hard each eased view pulls toward its goal, per second */
 const STIFF: Record<DriveView, number> = {
+  cockpit: 14,
   cab: 14,
   chase: 4,
   'chase-far': 3,
@@ -28,7 +30,9 @@ const STIFF: Record<DriveView, number> = {
   crash: 3,
 }
 /** views rigidly mounted to the train or the ground: no easing at all */
-const SNAP = new Set<DriveView>(['cab', 'nose', 'roof', 'trackside'])
+const SNAP = new Set<DriveView>(['cockpit', 'cab', 'nose', 'roof', 'trackside'])
+/** the views with mouse-look */
+const LOOK = new Set<DriveView>(['cockpit', 'cab'])
 /**
  * An eased view further than this from its goal is not lagging, it is lost --
  * the run just started, the train was teleported, the view was switched from
@@ -40,6 +44,8 @@ const LOST_M = 400
 const LOOK_YAW = 1.2
 const LOOK_PITCH = 0.5
 const LOOK_RETURN = 2.5
+/** near plane while seated in the cab, metres */
+const COCKPIT_NEAR = 0.08
 
 interface ControlsLike {
   target: THREE.Vector3
@@ -55,6 +61,7 @@ export function DriveCamera() {
   const lastView = useRef<DriveView | null>(null)
   const look = useRef({ yaw: 0, pitch: 0, dragging: false })
   const baseFov = useRef(camera.fov)
+  const baseNear = useRef(camera.near)
   const v = useMemo(
     () => ({
       dir: new THREE.Vector3(),
@@ -70,12 +77,14 @@ export function DriveCamera() {
     const el = gl.domElement
     const down = (e: PointerEvent) => {
       if (useSimStore.getState().appMode !== 'drive') return
-      if (useDriveStore.getState().view !== 'cab') return
+      if (!LOOK.has(useDriveStore.getState().view)) return
+      // a hand on the lever is not a look around
+      if (cockpitGrab.active) return
       look.current.dragging = true
       e.preventDefault()
     }
     const move = (e: PointerEvent) => {
-      if (!look.current.dragging) return
+      if (!look.current.dragging || cockpitGrab.active) return
       look.current.yaw = THREE.MathUtils.clamp(look.current.yaw - e.movementX * 0.004, -LOOK_YAW, LOOK_YAW)
       look.current.pitch = THREE.MathUtils.clamp(look.current.pitch - e.movementY * 0.003, -LOOK_PITCH, LOOK_PITCH)
     }
@@ -100,6 +109,7 @@ export function DriveCamera() {
       if (lastView.current !== null && !st.replaying) {
         // leaving drive: hand the camera back with its usual field of view
         camera.fov = baseFov.current
+        camera.near = baseNear.current
         camera.updateProjectionMatrix()
         lastView.current = null
       }
@@ -126,7 +136,7 @@ export function DriveCamera() {
     const pose = viewCamera(view, rig, mem.current, dt)
     const lost = camera.position.distanceTo(pose.eye) > LOST_M
 
-    if (view === 'cab') {
+    if (LOOK.has(view)) {
       if (!look.current.dragging) {
         const decay = Math.max(0, 1 - dt * LOOK_RETURN)
         look.current.yaw *= decay
@@ -154,6 +164,13 @@ export function DriveCamera() {
       const k = Math.min(1, dt * STIFF[view])
       camera.position.lerp(pose.eye, k)
       controls.target.lerp(pose.target, k)
+    }
+    // the desk is 0.6 m from the driver's eye, inside the scene's 1 m near
+    // plane; the cockpit view pulls the plane in (the log depth buffer copes)
+    const near = view === 'cockpit' ? COCKPIT_NEAR : baseNear.current
+    if (camera.near !== near) {
+      camera.near = near
+      camera.updateProjectionMatrix()
     }
     if (Math.abs(camera.fov - pose.fov) > 0.01) {
       camera.fov += (pose.fov - camera.fov) * Math.min(1, dt * 6)

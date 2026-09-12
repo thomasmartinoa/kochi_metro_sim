@@ -82,6 +82,18 @@ describe('drive cameras', () => {
     expect(p.eye.z - 2000).toBeLessThan(9.3)
   })
 
+  it('cockpit is the seated driver: on the seat, eyes above the desk, looking a little down', () => {
+    const p = viewCamera('cockpit', rig(), newCamMemory(), 1 / 60)
+    // the seat is 7.6 m ahead of the car's centre with its cushion at 1.7 m
+    expect(p.eye.z - 2000).toBeGreaterThan(7.2)
+    expect(p.eye.z - 2000).toBeLessThan(7.9)
+    expect(p.eye.y - 14.8).toBeGreaterThan(2.2)
+    expect(p.eye.y - 14.8).toBeLessThan(2.8)
+    // the desk (at ~2.0 m) has to be in frame, so the gaze dips below the eye
+    expect(p.target.y).toBeLessThan(p.eye.y)
+    expect(p.fov).toBeGreaterThanOrEqual(65)
+  })
+
   it('the replay opens trackside with the train already in shot', () => {
     const p = replayTrackside(rig(), newCamMemory())
     const ahead = p.eye.z - 2000

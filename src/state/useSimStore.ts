@@ -9,6 +9,7 @@ import { WATER_METRO_ENABLED } from '../config'
 
 export type Experience = 'landing' | 'metro' | 'water'
 export type AppMode = 'tracker' | 'explore' | 'drive'
+export type Weather = 'clear' | 'overcast' | 'rain' | 'monsoon' | 'fog'
 
 export interface Selection {
   kind: 'train' | 'station' | 'boat' | 'terminal'
@@ -24,8 +25,10 @@ interface SimStore {
   /** sim seconds per real second while scrubbing/playing */
   speed: number
   selection: Selection | null
+  weather: Weather
 
   setExperience: (e: Experience) => void
+  setWeather: (w: Weather) => void
   setAppMode: (m: AppMode) => void
   goLive: () => void
   /** jump the clock so IST time-of-day becomes daySec (stays on today) */
@@ -46,7 +49,9 @@ export const useSimStore = create<SimStore>((set, get) => ({
   clockMode: 'live',
   speed: 1,
   selection: null,
+  weather: 'clear',
 
+  setWeather: (w) => set({ weather: w }),
   setExperience: (e) =>
     set((s) => {
       // Water Metro is "coming soon" until the flag is on — never enter it.

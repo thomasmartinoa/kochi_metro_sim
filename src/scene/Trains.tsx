@@ -69,6 +69,8 @@ export function Trains() {
     // a scheduled train the player has collided with is now part of the wreck
     const drive = sim.appMode === 'drive' ? useDriveStore.getState().drive : null
     const struckG = drive?.derail?.cause === 'collision' ? drive.derail.struckRearG : undefined
+    // the trip the player is driving in place of
+    const taken = drive ? useDriveStore.getState().takenOverTripId : null
     for (let i = 0; i < POOL; i++) {
       const g = groupRefs.current[i]
       if (!g) continue
@@ -78,7 +80,7 @@ export function Trains() {
         st &&
         st.dir === drive!.dir &&
         Math.abs(gAt(st.sKm) + (st.dir === 0 ? -1 : 1) * CAR_LEN - struckG) < 60
-      if (!st || isStruck) {
+      if (!st || isStruck || st.tripId === taken) {
         g.visible = false
         continue
       }

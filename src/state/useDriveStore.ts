@@ -1,6 +1,6 @@
 /** Drive-mode session state: physics state + camera view + keyboard intents. */
 import { create } from 'zustand'
-import { newDrive, REAL_ENV, restartFromLastStop, setNotch, stepDrive, toggleDoors, withTraffic, type DriveState } from '../sim/drive'
+import { ADHESION, newDrive, REAL_ENV, restartFromLastStop, setNotch, stepDrive, toggleDoors, withTraffic, type DriveState } from '../sim/drive'
 import { liveTrainStates } from '../sim/engine'
 import { occupiedBlocks, signalAhead } from '../sim/signals'
 import { useSimStore } from './useSimStore'
@@ -14,6 +14,8 @@ export const REPLAY_CAMS: readonly ReplayCam[] = ['trackside', 'chase', 'drone',
 
 interface DriveStore {
   drive: DriveState | null
+  /** the timetable trip the player is standing in for, hidden for the run */
+  takenOverTripId: string | null
   view: DriveView
   /** watching the crash replay (only reachable while derailed) */
   replaying: boolean
@@ -25,6 +27,8 @@ interface DriveStore {
   /** after a derailment: back to the last platform, run intact */
   restart: () => void
   nudgeNotch: (delta: number) => void
+  /** absolute notch, for the cab lever */
+  setNotch: (notch: number) => void
   emergency: () => void
   doors: () => void
   /** wall-clock ms the horn was last sounded; the scene plays it */
@@ -53,23 +57,51 @@ let lastTickMs = 0
  * same-direction trains, which occupy blocks and can be run into.
  */
 export function liveEnv(dir: 0 | 1) {
+  const taken = useDriveStore.getState().takenOverTripId
   const trains = liveTrainStates(useSimStore.getState().epochMs)
-    .filter((t) => t.dir === dir)
+    .filter((t) => t.dir === dir && t.tripId !== taken)
     .map((t) => ({ sKm: t.sKm, dir: t.dir }))
   return withTraffic(REAL_ENV, trains, { occupiedBlocks, signalAhead })
 }
 
+/** a scheduled train this close to the player's start is the one the player is driving */
+const SLOT_M = 120
+
+/**
+ * The player's run takes over a real trip: whichever same-direction train
+ * the timetable has standing at the start. Left in, it sat inside the
+ * player's trainset, its cab drawn through ours, and when it pulled away
+ * the contact rule dragged us back behind it.
+ */
+function tripAtStart(dir: 0 | 1, startG: number): string | null {
+  let best: { tripId: string; d: number } | null = null
+  for (const t of liveTrainStates(useSimStore.getState().epochMs)) {
+    if (t.dir !== dir) continue
+    const d = Math.abs(REAL_ENV.gAt(t.sKm) - startG)
+    if (d < SLOT_M && (!best || d < best.d)) best = { tripId: t.tripId, d }
+  }
+  return best?.tripId ?? null
+}
+
 export const useDriveStore = create<DriveStore>((set, get) => ({
   drive: null,
-  view: 'cab',
-  viewBeforeCrash: 'cab',
+  takenOverTripId: null,
+  view: 'cockpit',
+  viewBeforeCrash: 'cockpit',
   replaying: false,
   replayCam: 'trackside',
   start: (dir) => {
     lastTickMs = performance.now()
-    set({ drive: newDrive(dir), view: 'cab', viewBeforeCrash: 'cab', replaying: false })
+    const drive = newDrive(dir)
+    set({
+      drive,
+      takenOverTripId: tripAtStart(dir, drive.gM),
+      view: 'cockpit',
+      viewBeforeCrash: 'cockpit',
+      replaying: false,
+    })
   },
-  exit: () => set({ drive: null, replaying: false }),
+  exit: () => set({ drive: null, takenOverTripId: null, replaying: false }),
   restart: () => {
     const d = get().drive
     if (d?.phase === 'derailed') {
@@ -85,6 +117,10 @@ export const useDriveStore = create<DriveStore>((set, get) => ({
   nudgeNotch: (delta) => {
     const d = get().drive
     if (d) set({ drive: setNotch(d, d.notch + delta) })
+  },
+  setNotch: (notch) => {
+    const d = get().drive
+    if (d) set({ drive: setNotch(d, notch) })
   },
   emergency: () => {
     const d = get().drive
@@ -112,7 +148,8 @@ export const useDriveStore = create<DriveStore>((set, get) => ({
     if (dtSec <= 0) return
     const d = get().drive
     if (d && d.phase !== 'done' && d.phase !== 'derailed') {
-      set({ drive: stepDrive(d, dtSec, liveEnv(d.dir)) })
+      const adhesion = ADHESION[useSimStore.getState().weather]
+      set({ drive: stepDrive(d.adhesion === adhesion ? d : { ...d, adhesion }, dtSec, liveEnv(d.dir)) })
     }
   },
 }))

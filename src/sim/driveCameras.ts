@@ -23,6 +23,7 @@ export interface Rig {
 }
 
 export type DriveView =
+  | 'cockpit'
   | 'cab'
   | 'chase'
   | 'chase-far'
@@ -36,6 +37,7 @@ export type DriveView =
 
 /** what C cycles through; 'crash' is chosen by a derailment, not the driver */
 export const VIEWS: readonly DriveView[] = [
+  'cockpit',
   'cab',
   'chase',
   'chase-far',
@@ -48,6 +50,7 @@ export const VIEWS: readonly DriveView[] = [
 ]
 
 export const VIEW_LABEL: Record<DriveView, string> = {
+  cockpit: 'Cockpit',
   cab: 'Cab',
   chase: 'Chase',
   'chase-far': 'Far',
@@ -94,6 +97,13 @@ const leftOf = (h: Vector3) => new Vector3(h.z, 0, -h.x)
  */
 const NOSE_AHEAD_M = 9.3
 const CAB = { ahead: NOSE_AHEAD_M - 1.4, up: 3.1, look: 80, lookUp: 1.0, fov: 62 }
+/**
+ * The driver's eye in the modelled cab: on the seat (7.6 m ahead of the car's
+ * centre, cushion at 1.7 m), gaze dipped ~14° so the desk and the lever sit
+ * in the lower third with the line above them, the way a driver actually
+ * looks at the road.
+ */
+const COCKPIT = { ahead: 7.55, up: 2.5, look: 30, lookUp: -3.1, fov: 72 }
 const CHASE = { back: 85, up: 32, look: 40, fov: DEFAULT_FOV }
 const CHASE_FAR = { back: 220, up: 90, look: 60, fov: DEFAULT_FOV }
 /** a dolly pacing the train beside the track, the "GoPro on a car alongside" shot */
@@ -112,11 +122,11 @@ const DRONE = { r: 60, h: 150, rate: 0.12, fov: 55 }
 /** eases in from wherever the camera was to a close orbit of the wreck */
 const CRASH = { r: 34, h: 13, rate: 0.2, ease: 0.8, fov: DEFAULT_FOV }
 
-function cab(rig: Rig): CamPose {
+function cab(rig: Rig, c: typeof CAB = CAB): CamPose {
   return {
-    eye: rig.pos.clone().addScaledVector(rig.heading, CAB.ahead).setY(rig.pos.y + CAB.up),
-    target: rig.pos.clone().addScaledVector(rig.heading, CAB.look).setY(rig.pos.y + CAB.lookUp),
-    fov: CAB.fov,
+    eye: rig.pos.clone().addScaledVector(rig.heading, c.ahead).setY(rig.pos.y + c.up),
+    target: rig.pos.clone().addScaledVector(rig.heading, c.look).setY(rig.pos.y + c.lookUp),
+    fov: c.fov,
   }
 }
 
@@ -213,6 +223,8 @@ function crash(rig: Rig, mem: CamMemory, dt: number): CamPose {
 export function viewCamera(view: DriveView, rig: Rig, mem: CamMemory, dtRaw: number): CamPose {
   const dt = Math.min(Math.max(dtRaw, 0), MAX_DT)
   switch (view) {
+    case 'cockpit':
+      return cab(rig, COCKPIT)
     case 'cab':
       return cab(rig)
     case 'chase':

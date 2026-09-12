@@ -4,13 +4,24 @@
  */
 import { useEffect, useState } from 'react'
 import { stations } from '../data/network'
-import { A_LAT_WARN, brakingDistanceM, grade, LINE_SPEED_KMH, NOTCH_MAX, NOTCH_MIN } from '../sim/drive'
+import { A_LAT_WARN, brakingDistanceM, grade, LINE_SPEED_KMH, NOTCH_MAX, NOTCH_MIN, WEATHERS, type Weather } from '../sim/drive'
+import { useSimStore } from '../state/useSimStore'
 import { VIEW_LABEL, VIEWS } from '../sim/driveCameras'
 import { useDriveStore } from '../state/useDriveStore'
 import { ReplayBar } from './ReplayBar'
 
+const WEATHER_LABEL: Record<Weather, string> = {
+  clear: 'Clear',
+  overcast: 'Overcast',
+  rain: 'Rain',
+  monsoon: 'Monsoon',
+  fog: 'Fog',
+}
+
 function StartScreen() {
   const start = useDriveStore((s) => s.start)
+  const weather = useSimStore((s) => s.weather)
+  const setWeather = useSimStore((s) => s.setWeather)
   return (
     <div className="hud-panel pointer-events-auto flex w-80 flex-col gap-3 px-5 py-4">
       <div className="font-display text-sm font-semibold tracking-widest text-paper-dim">
@@ -20,6 +31,33 @@ function StartScreen() {
         Take a 3-car trainset down the Blue Line. Stop on the mark at all 25
         stations. Mind the 80 km/h limit.
       </p>
+      <div className="flex flex-col gap-1">
+        <div className="font-display text-[10px] font-semibold tracking-widest text-paper-dim">WEATHER</div>
+        <div className="flex flex-wrap gap-1">
+          {WEATHERS.map((w) => (
+            <button
+              key={w}
+              onClick={() => setWeather(w)}
+              className={`rounded px-2 py-0.5 font-mono text-[11px] ${
+                weather === w ? 'bg-kmrl text-ink' : 'text-paper-dim hover:bg-panel hover:text-paper'
+              }`}
+            >
+              {WEATHER_LABEL[w]}
+            </button>
+          ))}
+          <button
+            onClick={() => setWeather(WEATHERS[Math.floor(Math.random() * WEATHERS.length)])}
+            className="rounded px-2 py-0.5 font-mono text-[11px] text-paper-dim hover:bg-panel hover:text-paper"
+          >
+            Random
+          </button>
+        </div>
+        {weather !== 'clear' && weather !== 'overcast' && (
+          <div className="font-mono text-[10px] text-lemon">
+            wet rail · braking distances stretch · ease off the notches
+          </div>
+        )}
+      </div>
       <div className="flex flex-col gap-2">
         <button
           onClick={() => start(0)}
@@ -39,7 +77,7 @@ function StartScreen() {
         <br />
         O doors · H horn · L headlights
         <br />
-        C / V next / previous view · 1-9 pick a view
+        C / V next / previous view · 1-0 pick a view · drag the lever, click the buttons
       </div>
     </div>
   )
@@ -70,7 +108,7 @@ export function DrivePanel() {
   const vKmh = drive.vMs * 3.6
   const target = stations[drive.nextStopOrder]
   const distM = target ? Math.abs(drive.distToNextM) : 0
-  const brakeNeed = brakingDistanceM(drive.vMs)
+  const brakeNeed = brakingDistanceM(drive.vMs, drive.adhesion)
   const lastStop = drive.stops[drive.stops.length - 1]
   const nStops = drive.dir === 0 ? stations.length - 1 : stations.length - 1
 
@@ -171,7 +209,11 @@ export function DrivePanel() {
               {Math.round(vKmh)}
             </span>
             <span className="font-display text-[11px] text-paper-dim">
-              km/h · limit {LINE_SPEED_KMH}
+              {drive.slipping ? (
+                <span className="font-semibold text-pinkline">WHEEL SLIP</span>
+              ) : (
+                <>km/h · limit {LINE_SPEED_KMH}</>
+              )}
             </span>
           </div>
 

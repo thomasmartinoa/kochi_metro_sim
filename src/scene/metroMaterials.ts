@@ -148,6 +148,23 @@ function applyPaneAlpha(m: THREE.MeshStandardMaterial): void {
   m.customProgramCacheKey = () => 'kochi-station-glazing'
 }
 
+/** materials whose roughness the weather changes, with their dry value */
+const wettable = new Map<THREE.MeshStandardMaterial, number>()
+/** how much of the dry roughness a soaking takes away */
+const WET_ROUGHNESS = 0.45
+
+/**
+ * Wet the metro: roughness comes down on the deck and the bodywork so they
+ * pick up a sheen and the sky, the way wet concrete and paint do. `wet` is
+ * 0 (dry) to 1 (soaked); cheap to call every frame.
+ */
+export function setWetness(wet: number): void {
+  for (const [m, dry] of wettable) {
+    const r = dry * (1 - WET_ROUGHNESS * wet)
+    if (Math.abs(m.roughness - r) > 0.002) m.roughness = r
+  }
+}
+
 /**
  * Light a material with the sky environment at the given strength. Idempotent.
  * Used on its own for anything that just wants a sky to reflect — the city's
@@ -228,6 +245,10 @@ export function prepareMetroMaterial(material: THREE.Material): void {
   // them. They just get a gentler share of the sky, because their diffuse
   // lighting is already painted into the texture.
   lightWithSky(m, isBaked ? BAKED_ENV : PBR_ENV)
+  // the surfaces the rain lands on
+  if (BODY_SIDES.test(m.name) || BODY_ROOF.test(m.name) || /^Bridge_Baked/i.test(m.name) || /^Deck_Base/i.test(m.name)) {
+    wettable.set(m, m.roughness)
+  }
   m.needsUpdate = true
 }
 

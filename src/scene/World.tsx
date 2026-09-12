@@ -23,6 +23,7 @@ import { ReplayTrain } from './drive/ReplayTrain'
 import { CabSounds } from './drive/CabSounds'
 import { SpeedBoards } from './drive/SpeedBoards'
 import { Signals } from './drive/Signals'
+import { Rain } from './drive/Rain'
 import { replay } from './drive/replay'
 import { wreck } from './drive/wreck'
 import { HorizonHaze } from './HorizonHaze'
@@ -99,6 +100,7 @@ function DevCam() {
       useSimStore.getState().select(kind && id ? { kind, id } : null)
     }
     w.__setDaySec = (s: number) => useSimStore.getState().scrubToDaySec(s)
+    w.__setWeather = (x: string) => useSimStore.getState().setWeather(x as never)
     w.__trainSKm = (id: string) => trainStateById(useSimStore.getState().epochMs, id)?.sKm
     w.__drive = () => useDriveStore.getState().drive
     w.__driveView = (v: string) => useDriveStore.getState().setView(v as never)
@@ -194,6 +196,7 @@ export function World() {
         <WreckGate />
         <SpeedBoards />
         <Signals />
+        <Rain />
       </Suspense>
       {/* Water Metro stays off the map entirely until it ships — routes,
           terminals and boats alike. It is built on the `water` branch, where

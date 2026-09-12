@@ -431,3 +431,54 @@ describe('signals and the train ahead', () => {
     expect(slow.bumps).toBe(1)
   })
 })
+
+// ---------------------------------------------------------------- 6f ----
+
+describe('weather and adhesion', () => {
+  it('braking distance stretches once adhesion falls below what the service brake asks', () => {
+    // the service brake (1.1 m/s²) is already under the dry limit, so dry rail
+    // is unaffected; wet rail caps braking at emergency x adhesion
+    const dry = brakingDistanceM(20, 1.0)
+    expect(dry).toBeCloseTo((20 * 20) / (2 * 1.1), 6)
+    const wet = brakingDistanceM(20, 0.75)
+    expect(wet).toBeCloseTo((20 * 20) / (2 * (1.3 * 0.75)), 6)
+    expect(wet).toBeGreaterThan(dry)
+    const monsoon = brakingDistanceM(20, 0.6)
+    expect(monsoon).toBeGreaterThan(wet)
+  })
+
+  it('in the wet the same brake application takes longer to stop from the same speed', () => {
+    const go = (adhesion: number) => {
+      let st: DriveState = { ...ready(0, STRAIGHT), phase: 'run', vMs: 20, adhesion }
+      st = setNotch(st, -4)
+      let t = 0
+      while (st.vMs > 0 && t < 120) {
+        st = stepDrive(st, 0.05, STRAIGHT)
+        t += 0.05
+      }
+      return t
+    }
+    expect(go(0.6)).toBeGreaterThan(go(1.0) * 1.4)
+  })
+
+  it('an emergency brake in the wet slides: the wheels lock and the brake gives less, with a warning', () => {
+    let wet: DriveState = { ...ready(0, STRAIGHT), phase: 'run', vMs: 20, adhesion: 0.6 }
+    wet = setNotch(wet, -5)
+    wet = stepDrive(wet, 0.05, STRAIGHT)
+    expect(wet.slipping).toBe(true)
+    let dry: DriveState = { ...ready(0, STRAIGHT), phase: 'run', vMs: 20, adhesion: 1.0 }
+    dry = setNotch(dry, -5)
+    dry = stepDrive(dry, 0.05, STRAIGHT)
+    expect(dry.slipping).toBe(false)
+    // sliding, the wet train sheds less speed per step than the dry one
+    expect(20 - wet.vMs).toBeLessThan(20 - dry.vMs)
+  })
+
+  it('power in the wet spins the wheels too, and a lower notch grips', () => {
+    let st: DriveState = { ...ready(0, STRAIGHT), phase: 'run', vMs: 5, adhesion: 0.6 }
+    const spun = stepDrive(setNotch(st, 4), 0.05, STRAIGHT)
+    expect(spun.slipping).toBe(true)
+    const gripped = stepDrive(setNotch(st, 2), 0.05, STRAIGHT)
+    expect(gripped.slipping).toBe(false)
+  })
+})

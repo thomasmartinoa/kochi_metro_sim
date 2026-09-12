@@ -55,8 +55,26 @@ const LATERAL_COST_PER_S = 8
 /** punctuality: points at the mark for on time, falling to zero at this many seconds off */
 const PUNCTUAL_MAX = 100
 const PUNCTUAL_ZERO_S = 90
+/**
+ * Rail adhesion by weather: the fraction of the trainset's dry braking and
+ * traction the wheels can actually put down. Demand more than that and they
+ * slip -- the brake gives a slide, the motors give wheelspin -- so a driver
+ * in the rain uses lower notches and longer braking distances.
+ */
+export const ADHESION: Record<Weather, number> = {
+  clear: 1.0,
+  overcast: 1.0,
+  rain: 0.75,
+  monsoon: 0.6,
+  fog: 0.85,
+}
+/** while slipping the wheels deliver this share of what adhesion allows */
+const SLIP_EFFICIENCY = 0.7
 /** run-out past a terminal before the buffer stop */
 const BUFFER_PAD_M = 60
+
+export type Weather = 'clear' | 'overcast' | 'rain' | 'monsoon' | 'fog'
+export const WEATHERS: readonly Weather[] = ['clear', 'overcast', 'rain', 'monsoon', 'fog']
 
 /** The line as the sim sees it: chainage <-> metres, and how it bends. */
 export interface DriveEnv {
@@ -224,6 +242,10 @@ export interface DriveState {
   bumps: number
   /** the next signal ahead, for the HUD */
   signal: { gM: number; distM: number; aspect: 'green' | 'yellow' | 'red' } | null
+  /** rail adhesion, 0..1 -- see ADHESION */
+  adhesion: number
+  /** the wheels are slipping: braking or traction demanded beyond what adhesion allows */
+  slipping: boolean
   /** order index of the next station to stop at */
   nextStopOrder: number
   /** real metres to the next stop's mark (negative once passed) */
@@ -265,6 +287,8 @@ export function newDrive(dir: 0 | 1, env: DriveEnv = REAL_ENV): DriveState {
     lastSpadG: null,
     bumps: 0,
     signal: null,
+    adhesion: 1,
+    slipping: false,
     nextStopOrder: dir === 0 ? 1 : stations.length - 2,
     distToNextM: 0,
     score: 0,
@@ -353,6 +377,12 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
   if (st.notch > 0) a = (st.notch / NOTCH_MAX) * TRAINSET.accelMs2 * massFactor
   else if (st.notch === -5) a = -TRAINSET.emergencyBrakeMs2
   else if (st.notch < 0) a = (st.notch / 4) * TRAINSET.brakeMs2
+  // Adhesion: the rail will only take so much. Ask for more and the wheels
+  // slip -- a slide under the brake, wheelspin under power -- and deliver
+  // less than the limit, not more. Dry rail takes everything the set has.
+  const limit = TRAINSET.emergencyBrakeMs2 * st.adhesion
+  st.slipping = st.vMs > 0.1 && st.adhesion < 1 && Math.abs(a) > limit
+  if (st.slipping) a = Math.sign(a) * limit * SLIP_EFFICIENCY
   a -= 0.004 * st.vMs // rolling/air drag
   st.vMs = Math.max(0, st.vMs + a * dt)
 
@@ -527,6 +557,7 @@ export function restartFromLastStop(st: DriveState, env: DriveEnv = REAL_ENV): D
     dwellRemainSec: 0,
     boarding: null,
     chime: false,
+    slipping: false,
     nextStopOrder: order + (st.dir === 0 ? 1 : -1),
     distToNextM: 0,
     lateralMs2: 0,
@@ -603,9 +634,10 @@ function scheduleFor(dir: 0 | 1, fromOrder: number): Record<number, number> {
   return out
 }
 
-/** braking distance from current speed at full service brake (for the HUD) */
-export function brakingDistanceM(vMs: number): number {
-  return (vMs * vMs) / (2 * TRAINSET.brakeMs2)
+/** braking distance from current speed at full service brake (for the HUD), on rail of this adhesion */
+export function brakingDistanceM(vMs: number, adhesion = 1): number {
+  const b = Math.min(TRAINSET.brakeMs2, TRAINSET.emergencyBrakeMs2 * adhesion)
+  return (vMs * vMs) / (2 * b)
 }
 
 export function grade(score: number, nStops: number): string {

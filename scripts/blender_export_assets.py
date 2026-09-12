@@ -432,10 +432,16 @@ for i, car in enumerate(cars):
     if len(ext) != len(car):
         export(ext, f'metro-car{i}-ext')
 
-# cockpit interior — exported for a future drive-mode cab view, not used yet
+# cab interior — drive mode's live cockpit (src/scene/drive/Cockpit.tsx).
+#
+# The shipped metro-cockpit.glb was exported from the live Blender scene over
+# MCP (2026-09-12): the front cab only (the 54 objects at the low-Y end of the
+# 'cockpit' collection), world transforms as authored, hierarchy intact. The
+# app mounts it in the leading car with a fixed offset (Cockpit.tsx MOUNT)
+# measured between the seat here and the seat in metro-car2.glb, so it only
+# stays right while this export and the car export agree. Re-export both, or
+# re-measure MOUNT, if the cab moves in the scene.
 cock = mesh_objs('cockpit')
-lo, hi = world_bbox(cock)
-bake_transform(cock, ((lo.x + hi.x) / 2, TRAIN_Y, RAIL_TOP))
 export(cock, 'metro-cockpit')
 
 print('DONE')

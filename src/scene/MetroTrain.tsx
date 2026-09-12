@@ -27,6 +27,7 @@ const SLOT_MODEL = [2, 1, 0] as const
 const LOD_SWITCH_M = 320
 
 export interface Part {
+  name: string
   geometry: THREE.BufferGeometry
   material: THREE.Material
 }
@@ -41,7 +42,7 @@ export function flattenScene(scene: THREE.Object3D): Part[] {
     geometry.applyMatrix4(o.matrixWorld)
     const material = Array.isArray(o.material) ? o.material[0] : o.material
     prepareMetroMaterial(material)
-    parts.push({ geometry, material })
+    parts.push({ name: o.name, geometry, material })
   })
   return parts
 }
@@ -56,23 +57,27 @@ export function useCarParts(): Part[][] {
   return useMemo(() => gltfs.map((g) => flattenScene(g.scene)), [gltfs])
 }
 
-function Meshes({ parts }: { parts: Part[] }) {
+function Meshes({ parts, hide }: { parts: Part[]; hide?: RegExp }) {
   return (
     <>
-      {parts.map((p, i) => (
-        <mesh key={i} geometry={p.geometry} material={p.material} />
-      ))}
+      {parts.map((p, i) =>
+        hide?.test(p.name) ? null : <mesh key={i} geometry={p.geometry} material={p.material} />,
+      )}
     </>
   )
 }
 
-/** One car of the set: `slot` 0 = leading, 1 = middle, 2 = trailing. */
-export function CarModel({ slot, parts }: { slot: 0 | 1 | 2; parts: Part[][] }) {
+/**
+ * One car of the set: `slot` 0 = leading, 1 = middle, 2 = trailing. `hide`
+ * leaves out the full-detail parts whose names match (drive mode swaps the
+ * leading car's baked-in cab for the live one).
+ */
+export function CarModel({ slot, parts, hide }: { slot: 0 | 1 | 2; parts: Part[][]; hide?: RegExp }) {
   const m = SLOT_MODEL[slot]
   return (
     <Detailed distances={[0, LOD_SWITCH_M]}>
       <group>
-        <Meshes parts={parts[m]} />
+        <Meshes parts={parts[m]} hide={hide} />
       </group>
       <group>
         <Meshes parts={parts[3 + m]} />

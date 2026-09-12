@@ -342,6 +342,17 @@ car's seat at load time.
   transforms, never re-simulates).
 - The cockpit lever's hinge axis and the screen mesh UVs are read from Blender
   once MCP is up; if a screen's UVs are unusable, the MFD is drawn on a quad
-  placed over it instead.
+  placed over it instead. *(6g: the UVs are usable but transposed — u runs
+  down the pane — and the right MFD is unwrapped upside down; `Cockpit.tsx`
+  draws through a transposing canvas transform per pane. The cab is exported
+  with `--join false --prune-attributes false` and the unused UV sets
+  stripped, or the screens lose their UVs. The lead car's own baked cab is
+  hidden by node name.)*
+- *(Found during 6g)* The timetable has a train standing at the start
+  terminus in the player's direction, exactly where the player's set spawns.
+  Its cab drew through ours and, when it pulled away, the contact rule
+  dragged the player back behind it. The run now takes over that trip
+  (`takenOverTripId`): hidden from the scene and from the traffic the sim
+  sees, for the whole run.
 - Fire is a shader-noise billboard, not a particle system, to stay cheap on
   phones.
