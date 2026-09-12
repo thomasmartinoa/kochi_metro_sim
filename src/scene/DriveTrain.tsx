@@ -13,6 +13,7 @@ import { VIEWS } from '../sim/driveCameras'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { CarModel, useCarParts } from './MetroTrain'
+import { replay } from './drive/replay'
 import { rig } from './drive/rig'
 import { wreck } from './drive/wreck'
 
@@ -79,7 +80,7 @@ export function DriveTrain() {
     }
   }, [])
 
-  useFrame(() => {
+  useFrame((_, dt) => {
     const { drive, tick } = useDriveStore.getState()
     const driving = useSimStore.getState().appMode === 'drive' && drive
     if (!group.current) return
@@ -92,6 +93,12 @@ export function DriveTrain() {
     tick() // physics dt derives from wall-clock inside the store
     const d = useDriveStore.getState().drive
     if (!d) return
+    if (d.phase === 'ready' && d.stops.length === 0 && replay.buffer.length && !replay.buffer.isFrozen) {
+      // a fresh run: start the tape over
+      replay.buffer.reset()
+      replay.clock = 0
+      replay.sealed = false
+    }
 
     // the three cars, each on its bogies, spaced along their own rail
     const placeCars = () => {
@@ -128,14 +135,44 @@ export function DriveTrain() {
         wreck.atMs = performance.now()
         wreck.ready = true
         useDriveStore.getState().setView('crash')
+        // the pre-crash window is fixed now; the wreck is appended to it
+        replay.buffer.freeze()
+        replay.buffer.extend()
+        replay.sealed = false
       }
       // stay drawn until the bodies are: they spawn in these exact poses, so
-      // the frame the swap happens on looks like every frame before it
-      group.current.visible = !wreck.live
+      // the frame the swap happens on looks like every frame before it.
+      // During a replay the ghost is the train; neither the plain cars nor
+      // the wreck are shown.
+      group.current.visible = !wreck.live && !useDriveStore.getState().replaying
     } else {
       wreck.ready = false
       group.current.visible = true
       placeCars()
+    }
+
+    // record the tape: what the scene draws this frame, on the buffer's clock.
+    // Rolling: the plain cars. Derailed: the rigid bodies (published by the
+    // wreck as `wreck.bodies`), until the wreck settles and the tape seals.
+    if (!useDriveStore.getState().replaying) {
+      replay.clock += Math.min(dt, 0.1)
+      const src = d.phase === 'derailed' ? (wreck.live ? wreck.bodies : null) : group.current.children
+      if (src && src.length === 3) {
+        replay.buffer.push({
+          t: replay.clock,
+          cars: [0, 1, 2].map((i) => {
+            const o = src[i] as THREE.Object3D
+            return { p: o.position.toArray() as [number, number, number], q: o.quaternion.toArray() as [number, number, number, number] }
+          }) as never,
+          speedKmh: d.phase === 'derailed' ? 0 : d.vMs * 3.6,
+          notch: d.notch,
+          doorsOpen: d.doorsOpen,
+        })
+      }
+      if (d.phase === 'derailed' && wreck.live && wreck.simT >= 8 && !replay.sealed) {
+        replay.buffer.freeze()
+        replay.sealed = true
+      }
     }
 
     // publish the lead car's pose for DriveCamera

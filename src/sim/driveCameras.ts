@@ -102,6 +102,12 @@ const NOSE = { ahead: NOSE_AHEAD_M + 0.3, up: 1.6, look: 120, fov: 80 }
 const ROOF = { back: -NOSE_AHEAD_M + 4, up: 4.4, look: 90, fov: 78 }
 /** a static camera planted ahead beside the track; re-planted once the train has passed it */
 const TRACKSIDE = { plantAhead: 70, passedBy: 40, out: 9, up: 2.2, fov: 45 }
+/**
+ * The replay opens on trackside, and must open WITH the train in shot: plant
+ * closer, and a little higher, so the first frame is the set bearing down on
+ * the camera rather than a speck 70 m off.
+ */
+const TRACKSIDE_REPLAY = { plantAhead: 34, passedBy: 30, out: 11, up: 3.2, fov: 50 }
 const DRONE = { r: 60, h: 150, rate: 0.12, fov: 55 }
 /** eases in from wherever the camera was to a close orbit of the wreck */
 const CRASH = { r: 34, h: 13, rate: 0.2, ease: 0.8, fov: DEFAULT_FOV }
@@ -148,17 +154,18 @@ function roof(rig: Rig): CamPose {
   }
 }
 
-function trackside(rig: Rig, mem: CamMemory): CamPose {
+function trackside(rig: Rig, mem: CamMemory, c: typeof TRACKSIDE = TRACKSIDE): CamPose {
   const along = mem.anchor ? mem.anchor.clone().sub(rig.pos).dot(rig.heading) : -Infinity
-  if (!mem.anchor || along < -TRACKSIDE.passedBy) {
-    const out = leftOf(rig.heading).multiplyScalar(TRACKSIDE.out)
-    mem.anchor = rig.pos
-      .clone()
-      .addScaledVector(rig.heading, TRACKSIDE.plantAhead)
-      .add(out)
-      .setY(rig.pos.y + TRACKSIDE.up)
+  if (!mem.anchor || along < -c.passedBy) {
+    const out = leftOf(rig.heading).multiplyScalar(c.out)
+    mem.anchor = rig.pos.clone().addScaledVector(rig.heading, c.plantAhead).add(out).setY(rig.pos.y + c.up)
   }
-  return { eye: mem.anchor.clone(), target: rig.pos.clone().setY(rig.pos.y + 1.8), fov: TRACKSIDE.fov }
+  return { eye: mem.anchor.clone(), target: rig.pos.clone().setY(rig.pos.y + 1.8), fov: c.fov }
+}
+
+/** Trackside as the replay opens it: the train already in shot. */
+export function replayTrackside(rig: Rig, mem: CamMemory): CamPose {
+  return trackside(rig, mem, TRACKSIDE_REPLAY)
 }
 
 function drone(rig: Rig, mem: CamMemory, dt: number): CamPose {

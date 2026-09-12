@@ -18,7 +18,9 @@ import { City, Palms } from './City'
 import { CityGLB } from './CityGLB'
 import { DriveTrain } from './DriveTrain'
 import { DriveCamera } from './drive/DriveCamera'
+import { ReplayTrain } from './drive/ReplayTrain'
 import { SpeedBoards } from './drive/SpeedBoards'
+import { replay } from './drive/replay'
 import { wreck } from './drive/wreck'
 import { HorizonHaze } from './HorizonHaze'
 import { Line3D } from './Line3D'
@@ -97,6 +99,9 @@ function DevCam() {
     w.__driveView = (v: string) => useDriveStore.getState().setView(v as never)
     w.__driveViewNow = () => useDriveStore.getState().view
     w.__driveRestart = () => useDriveStore.getState().restart()
+    w.__replay = (on: boolean) => (on ? useDriveStore.getState().enterReplay() : useDriveStore.getState().leaveReplay())
+    w.__replayState = () => ({ ...replay, buffer: undefined, frames: replay.buffer.length, first: replay.buffer.first?.t, last: replay.buffer.last?.t, frozen: replay.buffer.isFrozen })
+    w.__replaySeek = (t: number) => { replay.head = t; replay.playing = false }
     w.__controlsEnabled = () => (controls as { enabled?: boolean } | null)?.enabled
     w.__driveNotch = (n: number) => {
       const d = useDriveStore.getState().drive
@@ -178,6 +183,7 @@ export function World() {
         <Trains />
         <DriveTrain />
         <DriveCamera />
+        <ReplayTrain />
         <WreckGate />
         <SpeedBoards />
       </Suspense>

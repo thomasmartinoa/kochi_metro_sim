@@ -21,7 +21,7 @@ import {
   useSphericalJoint,
   type RapierRigidBody,
 } from '@react-three/rapier'
-import { createRef, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { createRef, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import * as THREE from 'three'
 import { MODEL_CAR_PITCH_M, TRAINSET } from '../../data/trainset'
 import { A_LAT_DERAIL } from '../../sim/drive'
@@ -119,13 +119,15 @@ function Coupler({ a, b }: { a: RefObject<RapierRigidBody | null>; b: RefObject<
 }
 
 /** Steps the world by hand (slow motion first), publishes the lead car for the camera. */
-function LeadTracker({ body }: { body: RefObject<RapierRigidBody | null> }) {
+function LeadTracker({ body, bodies }: { body: RefObject<RapierRigidBody | null>; bodies: RefObject<RapierRigidBody | null>[] }) {
   const { step } = useRapier()
   const acc = useRef(0)
+  const proxies = useMemo(() => bodies.map(() => new THREE.Object3D()), [bodies])
   useEffect(() => {
     wreck.simT = 0
     // the bodies are in the world from here: the plain cars may hide now
     wreck.live = true
+    wreck.bodies = proxies
     // fixed 1/60 steps: the accumulator keeps it frame-rate independent
     wreck.advance = (dt: number) => {
       acc.current += dt
@@ -136,12 +138,22 @@ function LeadTracker({ body }: { body: RefObject<RapierRigidBody | null> }) {
       }
       const t = body.current?.translation()
       if (t) wreck.lead.set(t.x, t.y, t.z)
+      // mirror the bodies' transforms onto plain objects the replay can read
+      bodies.forEach((b, i) => {
+        const rb = b.current
+        if (!rb) return
+        const p = rb.translation()
+        const q = rb.rotation()
+        proxies[i].position.set(p.x, p.y, p.z)
+        proxies[i].quaternion.set(q.x, q.y, q.z, q.w)
+      })
     }
     return () => {
       wreck.advance = null
       wreck.live = false
+      wreck.bodies = []
     }
-  }, [step, body])
+  }, [step, body, bodies, proxies])
   useFrame((_, dt) => {
     if (wreck.simT >= SETTLE_S) return
     const scale = wreck.simT < SLOW_S ? SLOW_SCALE : 1
@@ -200,10 +212,16 @@ function Cars() {
       ))}
       <Coupler a={refs[0]} b={refs[1]} />
       <Coupler a={refs[1]} b={refs[2]} />
-      <LeadTracker body={refs[0]} />
+      <LeadTracker body={refs[0]} bodies={refs} />
       <CrashFX />
     </>
   )
+}
+
+/** Hides the wreck's meshes (not its physics) while the replay ghost is shown. */
+function WreckVisibility({ children }: { children: ReactNode }) {
+  const replaying = useDriveStore((s) => s.replaying)
+  return <group visible={!replaying}>{children}</group>
 }
 
 export default function DriveWreck() {
@@ -220,7 +238,11 @@ export default function DriveWreck() {
   return (
     <Physics gravity={[0, -9.81, 0]} paused>
       {active && <Deck gM={gAt(derail.sKm)} />}
-      {active && <Cars />}
+      {active && (
+        <WreckVisibility>
+          <Cars />
+        </WreckVisibility>
+      )}
     </Physics>
   )
 }

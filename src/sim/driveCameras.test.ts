@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Vector3 } from 'three'
-import { newCamMemory, viewCamera, VIEWS, type Rig } from './driveCameras'
+import { newCamMemory, replayTrackside, viewCamera, VIEWS, type Rig } from './driveCameras'
 
 const rig = (over: Partial<Rig> = {}): Rig => ({
   pos: new Vector3(1000, 14.8, 2000),
@@ -80,5 +80,13 @@ describe('drive cameras', () => {
     // so the eye must be well forward of the centre -- not mid-saloon
     expect(p.eye.z - 2000).toBeGreaterThan(6)
     expect(p.eye.z - 2000).toBeLessThan(9.3)
+  })
+
+  it('the replay opens trackside with the train already in shot', () => {
+    const p = replayTrackside(rig(), newCamMemory())
+    const ahead = p.eye.z - 2000
+    expect(ahead).toBeGreaterThan(20)
+    expect(ahead).toBeLessThan(45) // closer than the driving trackside's 70 m
+    expect(p.eye.distanceTo(rig().pos)).toBeLessThan(40)
   })
 })

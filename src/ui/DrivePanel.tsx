@@ -7,6 +7,7 @@ import { stations } from '../data/network'
 import { A_LAT_WARN, brakingDistanceM, grade, LINE_SPEED_KMH, NOTCH_MAX, NOTCH_MIN } from '../sim/drive'
 import { VIEW_LABEL, VIEWS } from '../sim/driveCameras'
 import { useDriveStore } from '../state/useDriveStore'
+import { ReplayBar } from './ReplayBar'
 
 function StartScreen() {
   const start = useDriveStore((s) => s.start)
@@ -46,6 +47,8 @@ export function DrivePanel() {
   const drive = useDriveStore((s) => s.drive)
   const exit = useDriveStore((s) => s.exit)
   const restart = useDriveStore((s) => s.restart)
+  const enterReplay = useDriveStore((s) => s.enterReplay)
+  const replaying = useDriveStore((s) => s.replaying)
   const nudgeNotch = useDriveStore((s) => s.nudgeNotch)
   const view = useDriveStore((s) => s.view)
   const setView = useDriveStore((s) => s.setView)
@@ -58,6 +61,7 @@ export function DrivePanel() {
   }, [])
 
   if (!drive) return <StartScreen />
+  if (replaying) return <ReplayBar />
 
   const vKmh = drive.vMs * 3.6
   const target = stations[drive.nextStopOrder]
@@ -79,6 +83,12 @@ export function DrivePanel() {
               : `${Math.round(drive.derail.speedKmh)} km/h into the buffer stop · limit ${Math.round(drive.derail.limitKmh)}`}
           </div>
           <div className="font-mono text-3xl font-semibold text-pinkline">{drive.score}</div>
+          <button
+            onClick={enterReplay}
+            className="rounded-md bg-lemon px-3 py-1.5 font-display text-sm font-semibold text-ink"
+          >
+            Watch replay
+          </button>
           <button
             onClick={restart}
             className="rounded-md bg-kmrl px-3 py-1.5 font-display text-sm font-semibold text-ink"

@@ -93,14 +93,19 @@ export function DriveCamera() {
   }, [gl])
 
   useFrame((_, dtRaw) => {
-    const driving = useSimStore.getState().appMode === 'drive' && !!useDriveStore.getState().drive
-    if (!driving || !rig.valid || !controls) {
-      if (lastView.current !== null) {
+    const st = useDriveStore.getState()
+    const driving = useSimStore.getState().appMode === 'drive' && !!st.drive
+    // while a replay plays, ReplayTrain owns the camera
+    if (!driving || !rig.valid || !controls || st.replaying) {
+      if (lastView.current !== null && !st.replaying) {
         // leaving drive: hand the camera back with its usual field of view
         camera.fov = baseFov.current
         camera.updateProjectionMatrix()
         lastView.current = null
       }
+      // coming back from a replay, re-seed the crash orbit from where the
+      // replay camera left us rather than jumping
+      if (!st.replaying && lastView.current === 'crash') lastView.current = null
       return
     }
     controls.enabled = false

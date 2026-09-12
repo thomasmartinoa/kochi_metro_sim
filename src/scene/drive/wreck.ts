@@ -24,6 +24,8 @@ export const wreck = {
   lateralMs2: 0,
   /** written every frame by DriveWreck: the lead car, for the camera */
   lead: new THREE.Vector3(),
+  /** the three rigid-body objects (world transforms), leading car first, while live */
+  bodies: [] as THREE.Object3D[],
   /** wall-clock ms of the derail frame */
   atMs: 0,
   /**

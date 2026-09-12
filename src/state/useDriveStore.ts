@@ -5,9 +5,16 @@ import { VIEWS, type DriveView } from '../sim/driveCameras'
 
 export type { DriveView }
 
+/** cameras available while watching a replay; a subset of the drive views */
+export type ReplayCam = 'trackside' | 'chase' | 'drone' | 'crash'
+export const REPLAY_CAMS: readonly ReplayCam[] = ['trackside', 'chase', 'drone', 'crash']
+
 interface DriveStore {
   drive: DriveState | null
   view: DriveView
+  /** watching the crash replay (only reachable while derailed) */
+  replaying: boolean
+  replayCam: ReplayCam
   /** the driver's view before a crash, to return to on restart */
   viewBeforeCrash: DriveView
   start: (dir: 0 | 1) => void
@@ -19,6 +26,9 @@ interface DriveStore {
   setView: (v: DriveView) => void
   /** step through VIEWS; from the crash view, from the view before it */
   cycleView: (delta?: number) => void
+  enterReplay: () => void
+  leaveReplay: () => void
+  setReplayCam: (c: ReplayCam) => void
   /**
    * Advance physics. dt is derived internally from wall-clock so the step is
    * idempotent per animation frame — extra callers (StrictMode double mounts,
@@ -33,18 +43,25 @@ export const useDriveStore = create<DriveStore>((set, get) => ({
   drive: null,
   view: 'cab',
   viewBeforeCrash: 'cab',
+  replaying: false,
+  replayCam: 'trackside',
   start: (dir) => {
     lastTickMs = performance.now()
-    set({ drive: newDrive(dir), view: 'cab', viewBeforeCrash: 'cab' })
+    set({ drive: newDrive(dir), view: 'cab', viewBeforeCrash: 'cab', replaying: false })
   },
-  exit: () => set({ drive: null }),
+  exit: () => set({ drive: null, replaying: false }),
   restart: () => {
     const d = get().drive
     if (d?.phase === 'derailed') {
       lastTickMs = performance.now()
-      set((s) => ({ drive: restartFromLastStop(d), view: s.viewBeforeCrash }))
+      set((s) => ({ drive: restartFromLastStop(d), view: s.viewBeforeCrash, replaying: false }))
     }
   },
+  enterReplay: () => {
+    if (get().drive?.phase === 'derailed') set({ replaying: true, replayCam: 'trackside' })
+  },
+  leaveReplay: () => set({ replaying: false }),
+  setReplayCam: (c) => set({ replayCam: c }),
   nudgeNotch: (delta) => {
     const d = get().drive
     if (d) set({ drive: setNotch(d, d.notch + delta) })
