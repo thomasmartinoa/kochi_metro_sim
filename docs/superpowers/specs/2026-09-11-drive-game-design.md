@@ -239,6 +239,12 @@ follow ("Collided with WK_48 at 34 km/h · passed a red at Kaloor"). Below
 10 km/h it is a bump: score −100, cars stay on the rails. The buffer stop at
 each terminal is the same rule at any speed above 15 km/h.
 
+*(As built in 6d: contact is a sim rule — the nose against the rear of the
+nearest train ahead along the line — rather than a Rapier collider on the
+scheduled set; the physics world only wakes on the derail frame, where the
+struck rear car is spawned as a dynamic body with the player's cars. Same
+outcome, no live collider to keep in step with the timetable.)*
+
 ### 3.11 · Weather
 
 A weather state on the sim store — clear, overcast, rain, heavy monsoon,
