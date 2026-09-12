@@ -376,3 +376,58 @@ describe('punctuality', () => {
     expect(typeof last.punctualityPoints).toBe('number')
   })
 })
+
+// ---------------------------------------------------------------- 6e ----
+
+describe('signals and the train ahead', () => {
+  /**
+   * A signalled line the way the real one behaves: signals every 500 m, and
+   * "the signal ahead" is always the NEXT one -- once you are past a signal it
+   * is no longer reported. (A stub that kept reporting the same signal after
+   * it was passed hid a real bug: the crossing was never observed.)
+   */
+  const signalled = (redAtG: number): DriveEnv => ({
+    ...STRAIGHT,
+    signalAt: (gM, dir) => {
+      const next = dir === 0 ? Math.floor(gM / 500 + 1) * 500 : Math.ceil(gM / 500 - 1) * 500
+      return { gM: next, aspect: next === redAtG ? 'red' : 'green' }
+    },
+  })
+
+  it('passing a red signal is a SPAD: -300, recorded once, the run goes on', () => {
+    // a red at 1000 m on the straight
+    const env = signalled(1000)
+    let st = run(setNotch(ready(0, env), 4), 30, env) // ~30 m/s
+    const before = st.score
+    while (st.gM < 1010) st = stepDrive(st, 0.05, env)
+    expect(st.spads).toBe(1)
+    expect(st.score).toBe(before - 300)
+    expect(st.phase).toBe('run')
+    st = run(st, 3, env)
+    expect(st.spads).toBe(1) // charged once, not every step past it
+  })
+
+  it('a green or yellow costs nothing', () => {
+    const env = signalled(-1) // no red anywhere
+    let st = run(setNotch(ready(0, env), 4), 30, env)
+    while (st.gM < 1010) st = stepDrive(st, 0.05, env)
+    expect(st.spads).toBe(0)
+  })
+
+  it('closing on the train ahead above 10 km/h is a collision; below it a bump', () => {
+    // the train ahead sits 400 m up the line, stationary
+    const env: DriveEnv = { ...STRAIGHT, trainAheadG: () => 400 }
+    let st = run(setNotch(ready(0, env), 4), 25, env) // ~90 km/h by 400 m... actually hits first
+    expect(st.phase).toBe('derailed')
+    expect(st.derail!.cause).toBe('collision')
+    expect(st.derail!.speedKmh).toBeGreaterThan(10)
+
+    let slow: DriveState = { ...ready(0, env), gM: 380, phase: 'run', vMs: 2 } // 7 km/h
+    const before = slow.score
+    slow = run(slow, 20, env)
+    expect(slow.phase).toBe('run')
+    expect(slow.vMs).toBe(0) // stopped against the train ahead
+    expect(slow.score).toBe(before - 100)
+    expect(slow.bumps).toBe(1)
+  })
+})

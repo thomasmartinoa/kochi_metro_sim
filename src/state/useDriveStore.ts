@@ -1,6 +1,9 @@
 /** Drive-mode session state: physics state + camera view + keyboard intents. */
 import { create } from 'zustand'
-import { newDrive, restartFromLastStop, setNotch, stepDrive, toggleDoors, type DriveState } from '../sim/drive'
+import { newDrive, REAL_ENV, restartFromLastStop, setNotch, stepDrive, toggleDoors, withTraffic, type DriveState } from '../sim/drive'
+import { liveTrainStates } from '../sim/engine'
+import { occupiedBlocks, signalAhead } from '../sim/signals'
+import { useSimStore } from './useSimStore'
 import { VIEWS, type DriveView } from '../sim/driveCameras'
 
 export type { DriveView }
@@ -44,6 +47,17 @@ interface DriveStore {
 }
 
 let lastTickMs = 0
+
+/**
+ * The line as it is this instant: the real alignment plus the timetable's
+ * same-direction trains, which occupy blocks and can be run into.
+ */
+export function liveEnv(dir: 0 | 1) {
+  const trains = liveTrainStates(useSimStore.getState().epochMs)
+    .filter((t) => t.dir === dir)
+    .map((t) => ({ sKm: t.sKm, dir: t.dir }))
+  return withTraffic(REAL_ENV, trains, { occupiedBlocks, signalAhead })
+}
 
 export const useDriveStore = create<DriveStore>((set, get) => ({
   drive: null,
@@ -97,6 +111,8 @@ export const useDriveStore = create<DriveStore>((set, get) => ({
     lastTickMs = now
     if (dtSec <= 0) return
     const d = get().drive
-    if (d && d.phase !== 'done' && d.phase !== 'derailed') set({ drive: stepDrive(d, dtSec) })
+    if (d && d.phase !== 'done' && d.phase !== 'derailed') {
+      set({ drive: stepDrive(d, dtSec, liveEnv(d.dir)) })
+    }
   },
 }))

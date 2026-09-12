@@ -9,7 +9,8 @@ import { WATER_METRO_ENABLED } from '../config'
 import { stations } from '../data/network'
 import { centerAt, gAt } from '../sim/alignment'
 import { stepDrive } from '../sim/drive'
-import { useDriveStore } from '../state/useDriveStore'
+import { trainStateById } from '../sim/engine'
+import { liveEnv, useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { Atmosphere } from './Atmosphere'
 import { Boats } from './Boats'
@@ -21,6 +22,7 @@ import { DriveCamera } from './drive/DriveCamera'
 import { ReplayTrain } from './drive/ReplayTrain'
 import { CabSounds } from './drive/CabSounds'
 import { SpeedBoards } from './drive/SpeedBoards'
+import { Signals } from './drive/Signals'
 import { replay } from './drive/replay'
 import { wreck } from './drive/wreck'
 import { HorizonHaze } from './HorizonHaze'
@@ -97,6 +99,7 @@ function DevCam() {
       useSimStore.getState().select(kind && id ? { kind, id } : null)
     }
     w.__setDaySec = (s: number) => useSimStore.getState().scrubToDaySec(s)
+    w.__trainSKm = (id: string) => trainStateById(useSimStore.getState().epochMs, id)?.sKm
     w.__drive = () => useDriveStore.getState().drive
     w.__driveView = (v: string) => useDriveStore.getState().setView(v as never)
     w.__driveViewNow = () => useDriveStore.getState().view
@@ -121,7 +124,8 @@ function DevCam() {
     // step the drive sim by dt seconds regardless of frame rate, for tests
     w.__driveStep = (dt: number) => {
       const d = useDriveStore.getState().drive
-      if (d) useDriveStore.setState({ drive: stepDrive(d, dt) })
+      // the same env the game ticks with: signals and the train ahead included
+      if (d) useDriveStore.setState({ drive: stepDrive(d, dt, liveEnv(d.dir)) })
     }
     // teleport the drive to a chainage, at rest, for testing curves and crashes
     w.__driveJump = (sKm: number) => {
@@ -189,6 +193,7 @@ export function World() {
         <CabSounds />
         <WreckGate />
         <SpeedBoards />
+        <Signals />
       </Suspense>
       {/* Water Metro stays off the map entirely until it ships — routes,
           terminals and boats alike. It is built on the `water` branch, where

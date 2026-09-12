@@ -7,7 +7,7 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { MODEL_CAR_PITCH_M } from '../data/trainset'
 import { liveTrainStates, type TrainState } from '../sim/engine'
-import { carPoseAt, trackOffsetBy } from '../sim/alignment'
+import { carPoseAt, gAt, trackOffsetBy } from '../sim/alignment'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { mat } from './materials'
@@ -63,20 +63,28 @@ export function Trains() {
     const sim = useSimStore.getState()
     const states = liveTrainStates(sim.epochMs)
     statesRef.current = states
-    // While the player drives, their track is theirs alone: the timetable's
-    // trains in that direction would run straight through them. Only the
-    // opposing direction keeps its scheduled service, passing on the other rail.
+    // The timetable's trains run in both directions while the player drives:
+    // the ones ahead are what the signals protect, and what a driver who
+    // ignores them runs into.
+    // a scheduled train the player has collided with is now part of the wreck
     const drive = sim.appMode === 'drive' ? useDriveStore.getState().drive : null
+    const struckG = drive?.derail?.cause === 'collision' ? drive.derail.struckRearG : undefined
     for (let i = 0; i < POOL; i++) {
       const g = groupRefs.current[i]
       if (!g) continue
       const st = states[i]
-      if (!st || (drive && st.dir === drive.dir)) {
+      const isStruck =
+        struckG !== undefined &&
+        st &&
+        st.dir === drive!.dir &&
+        Math.abs(gAt(st.sKm) + (st.dir === 0 ? -1 : 1) * CAR_LEN - struckG) < 60
+      if (!st || isStruck) {
         g.visible = false
         continue
       }
       g.visible = true
       g.userData.tripId = st.tripId
+      g.userData.dir = st.dir
       // each car sits on its two bogies and chords the curve between them;
       // the cars are spaced along the rail they run on, not the centreline,
       // so the couplers meet round bends (see alignment.ts)

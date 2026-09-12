@@ -79,12 +79,14 @@ export function DrivePanel() {
       {drive.phase === 'derailed' && drive.derail ? (
         <>
           <div className="font-display text-sm font-semibold tracking-widest text-pinkline">
-            DERAILED
+            {drive.derail.cause === 'collision' ? 'COLLISION' : 'DERAILED'}
           </div>
           <div className="font-display text-[13px] leading-snug text-paper">
             {drive.derail.cause === 'curve'
               ? `${Math.round(drive.derail.speedKmh)} km/h into a ${Math.round(drive.derail.radiusM)} m curve · limit ${Math.round(drive.derail.limitKmh)}`
-              : `${Math.round(drive.derail.speedKmh)} km/h into the buffer stop · limit ${Math.round(drive.derail.limitKmh)}`}
+              : drive.derail.cause === 'collision'
+                ? `Collided with the train ahead at ${Math.round(drive.derail.speedKmh)} km/h${drive.spads ? ` · passed ${drive.spads} red` : ''}`
+                : `${Math.round(drive.derail.speedKmh)} km/h into the buffer stop · limit ${Math.round(drive.derail.limitKmh)}`}
           </div>
           <div className="font-mono text-3xl font-semibold text-pinkline">{drive.score}</div>
           <button
@@ -241,6 +243,27 @@ export function DrivePanel() {
                   brake point {Math.round(brakeNeed)} m
                 </span>
               </div>
+            </div>
+          )}
+
+          {drive.signal && (
+            <div className="flex items-baseline justify-between rounded-md bg-panel/70 px-3 py-1.5">
+              <span className="flex items-center gap-2 font-display text-[11px] tracking-wide text-paper-dim">
+                <span
+                  className={`inline-block h-2.5 w-2.5 rounded-full ${
+                    drive.signal.aspect === 'red'
+                      ? 'bg-[#FF3B3B]'
+                      : drive.signal.aspect === 'yellow'
+                        ? 'bg-[#FFC93C]'
+                        : 'bg-[#22E36A]'
+                  }`}
+                />
+                SIGNAL {drive.signal.aspect.toUpperCase()}
+                {drive.spads > 0 && <span className="text-pinkline"> · SPAD ×{drive.spads}</span>}
+              </span>
+              <span className="font-mono text-sm tabular-nums text-paper">
+                {Math.max(0, Math.round(drive.signal.distM))} m
+              </span>
             </div>
           )}
 

@@ -212,6 +212,31 @@ function Cars() {
       ))}
       <Coupler a={refs[0]} b={refs[1]} />
       <Coupler a={refs[1]} b={refs[2]} />
+      {wreck.struck && (
+        // the rear car of the train we hit: knocked forward and off its
+        // rails, colliding with the structure like ours do
+        <RigidBody
+          name="struck-car"
+          type="dynamic"
+          position={[wreck.struck.position.x, wreck.struck.position.y + SPAWN_LIFT_M, wreck.struck.position.z]}
+          quaternion={wreck.struck.quaternion.toArray() as [number, number, number, number]}
+          linearVelocity={[wreck.struckVelocity.x, wreck.struckVelocity.y + 0.8, wreck.struckVelocity.z]}
+          angularVelocity={[0, 0.3, 0]}
+          linearDamping={0.05}
+          angularDamping={0.25}
+          colliders={false}
+        >
+          <CuboidCollider
+            args={[TRAINSET.widthM / 2, TRAINSET.heightM / 2, CAR_BOX_LEN / 2]}
+            position={[0, TRAINSET.heightM / 2, 0]}
+            mass={CAR_MASS_KG}
+            friction={CAR_FRICTION}
+            restitution={0.05}
+            collisionGroups={CARS}
+          />
+          <CarModel slot={2} parts={parts} />
+        </RigidBody>
+      )}
       <LeadTracker body={refs[0]} bodies={refs} />
       <CrashFX />
     </>

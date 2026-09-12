@@ -8,7 +8,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { MODEL_CAR_PITCH_M } from '../data/trainset'
-import { carPoseAt, curvatureAtG, gAt, trackOffsetBy } from '../sim/alignment'
+import { carPoseAt, curvatureAtG, gAt, sAtG, trackOffsetBy } from '../sim/alignment'
 import { VIEWS } from '../sim/driveCameras'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
@@ -145,6 +145,17 @@ export function DriveTrain() {
           .multiplyScalar((d.derail?.speedKmh ?? 0) / 3.6)
         wreck.kappa = curvatureAtG(gAt(d.sKm))
         wreck.lateralMs2 = d.lateralMs2
+        // a collision: the car we hit comes off too, from where the timetable has it
+        wreck.struck = null
+        if (d.derail?.cause === 'collision' && d.derail.struckRearG !== undefined) {
+          // the struck car's centre is half a pitch beyond its rear
+          const centreG = d.derail.struckRearG + (d.dir === 0 ? 1 : -1) * (MODEL_CAR_PITCH_M / 2)
+          carPoseAt(sAtG(centreG), d.dir, pose)
+          const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), pose.heading)
+          wreck.struck = { position: pose.pos.clone(), quaternion: q }
+          // it leaves at a fraction of our speed, along the line
+          wreck.struckVelocity.copy(pose.heading).multiplyScalar(((d.derail.speedKmh ?? 0) / 3.6) * 0.45)
+        }
         wreck.lead.copy(lead.position)
         wreck.atMs = performance.now()
         wreck.ready = true

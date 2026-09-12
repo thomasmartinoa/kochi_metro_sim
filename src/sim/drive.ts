@@ -25,6 +25,12 @@ export const A_LAT_DERAIL = 2.6
 export const DERAIL_HOLD_S = 0.6
 /** hitting the terminal buffer stop faster than this derails too */
 export const BUFFER_KMH = 15
+/** running into the train ahead faster than this is a collision; slower, a bump */
+export const COLLIDE_KMH = 10
+const SPAD_PENALTY = 300
+const BUMP_PENALTY = 100
+/** the gap left between the player's nose and the train ahead's rear when they touch */
+const COUPLER_GAP_M = 1.0
 /** derailing costs this on top of whatever the run had earned */
 const DERAIL_PENALTY = 1000
 /** how far ahead of the leading car the HUD looks for the next restriction */
@@ -62,9 +68,17 @@ export interface DriveEnv {
   curvatureAtG(gM: number): number
   /** metres at which the buffer stops stand, [aluva end, tripunithura end] */
   bufferG: [number, number]
+  /** the next signal ahead of gM in dir, if the line is signalled */
+  signalAt?(gM: number, dir: 0 | 1): { gM: number; aspect: 'green' | 'yellow' | 'red' } | null
+  /** metres along the line of the rear of the nearest train ahead in dir, if any */
+  trainAheadG?(gM: number, dir: 0 | 1): number | null
 }
 
-/** The real Blue Line. */
+/**
+ * The real Blue Line. Signals and the train ahead are not here: they depend
+ * on the timetable at THIS instant, which the pure sim does not know. The
+ * store composes them on each tick with `withTraffic`.
+ */
 export const REAL_ENV: DriveEnv = {
   gAt,
   sAtG,
@@ -82,7 +96,9 @@ export function curveLimitKmh(kappa: number): number {
 }
 
 export interface DerailRecord {
-  cause: 'curve' | 'buffer'
+  cause: 'curve' | 'buffer' | 'collision'
+  /** for a collision: the rear of the train that was hit, metres along the line */
+  struckRearG?: number
   gM: number
   sKm: number
   speedKmh: number
@@ -113,6 +129,40 @@ function restrictionAhead(leadG: number, dir: 0 | 1, env: DriveEnv): Restriction
     }
   }
   return best
+}
+
+/**
+ * The real line plus the trains on it right now: signal aspects from block
+ * occupancy, and the rear of the nearest scheduled train ahead. `trains` are
+ * same-direction scheduled trains as (chainage, direction).
+ */
+export function withTraffic(
+  base: DriveEnv,
+  trains: { sKm: number; dir: 0 | 1 }[],
+  signals: {
+    occupiedBlocks(trains: { sKm: number; dir: 0 | 1 }[], dir: 0 | 1): Set<number>
+    signalAhead(sKm: number, dir: 0 | 1, occ: Set<number>): { gM: number; aspect: 'green' | 'yellow' | 'red' } | null
+  },
+): DriveEnv {
+  const occ = [signals.occupiedBlocks(trains, 0), signals.occupiedBlocks(trains, 1)]
+  return {
+    ...base,
+    signalAt: (gM, dir) => signals.signalAhead(base.sAtG(gM), dir, occ[dir]),
+    trainAheadG: (gM, dir) => {
+      // the rear of the nearest train ahead: its reference is its centre, so
+      // its rear is a car pitch behind that
+      let best: number | null = null
+      for (const t of trains) {
+        if (t.dir !== dir) continue
+        const centre = base.gAt(t.sKm)
+        const rear = centre + (dir === 0 ? -1 : 1) * MODEL_CAR_PITCH_M
+        const ahead = dir === 0 ? rear > gM : rear < gM
+        if (!ahead) continue
+        if (best === null || (dir === 0 ? rear < best : rear > best)) best = rear
+      }
+      return best
+    },
+  }
 }
 
 export type DrivePhase = 'ready' | 'run' | 'dwell' | 'derailed' | 'done'
@@ -166,6 +216,14 @@ export interface DriveState {
   runS: number
   /** runS at the last notch change, for the jerk rule */
   lastNotchAtS: number
+  /** signals passed at danger this run */
+  spads: number
+  /** metres of the last signal charged as a SPAD, so it is charged once */
+  lastSpadG: number | null
+  /** low-speed contacts with the train ahead */
+  bumps: number
+  /** the next signal ahead, for the HUD */
+  signal: { gM: number; distM: number; aspect: 'green' | 'yellow' | 'red' } | null
   /** order index of the next station to stop at */
   nextStopOrder: number
   /** real metres to the next stop's mark (negative once passed) */
@@ -203,6 +261,10 @@ export function newDrive(dir: 0 | 1, env: DriveEnv = REAL_ENV): DriveState {
     schedule: null,
     runS: 0,
     lastNotchAtS: -1,
+    spads: 0,
+    lastSpadG: null,
+    bumps: 0,
+    signal: null,
     nextStopOrder: dir === 0 ? 1 : stations.length - 2,
     distToNextM: 0,
     score: 0,
@@ -294,8 +356,50 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
   a -= 0.004 * st.vMs // rolling/air drag
   st.vMs = Math.max(0, st.vMs + a * dt)
 
+  const prevG = st.gM
   st.gM += st.dir === 0 ? st.vMs * dt : -st.vMs * dt
+
+  // --- the train ahead ---
+  // Contact is at the nose, a car pitch ahead of the reference. Fast, and it
+  // is a collision -- the wreck takes over; slow, a bump that stops the train
+  // against the one in front, which then sits there until it moves off.
+  const aheadG = env.trainAheadG?.(st.gM, st.dir) ?? null
+  if (aheadG !== null) {
+    const noseG = st.gM + (st.dir === 0 ? 1 : -1) * MODEL_CAR_PITCH_M
+    const gap = st.dir === 0 ? aheadG - noseG : noseG - aheadG
+    if (gap <= COUPLER_GAP_M) {
+      if (kmh(st.vMs) > COLLIDE_KMH) {
+        st.sKm = env.sAtG(st.gM)
+        const rec = derailed(st, env, { cause: 'collision', limitKmh: COLLIDE_KMH, radiusM: Infinity })
+        rec.derail!.struckRearG = aheadG
+        return rec
+      }
+      // held against the train ahead
+      st.gM = st.dir === 0 ? aheadG - COUPLER_GAP_M - MODEL_CAR_PITCH_M : aheadG + COUPLER_GAP_M + MODEL_CAR_PITCH_M
+      if (prev.vMs > 0 && st.vMs > 0) {
+        st.bumps += 1
+        st.score -= BUMP_PENALTY
+      }
+      st.vMs = 0
+    }
+  }
   st.sKm = env.sAtG(st.gM)
+
+  // --- signals ---
+  // A SPAD is judged against the signal that was ahead BEFORE this step: once
+  // the train is past a block entry, "the signal ahead" is already the next
+  // one, so the crossing has to be caught on the way in, not looked up after.
+  const was = prev.signal
+  if (was && was.aspect === 'red') {
+    const crossed = st.dir === 0 ? prevG < was.gM && st.gM >= was.gM : prevG > was.gM && st.gM <= was.gM
+    if (crossed && st.lastSpadG !== was.gM) {
+      st.spads += 1
+      st.lastSpadG = was.gM
+      st.score -= SPAD_PENALTY
+    }
+  }
+  const sig = env.signalAt?.(st.gM, st.dir) ?? null
+  st.signal = sig ? { gM: sig.gM, distM: st.dir === 0 ? sig.gM - st.gM : st.gM - sig.gM, aspect: sig.aspect } : null
 
   // --- the curve rule ---
   // lateral acceleration on the leading car: v²·κ, with κ at the front of the
