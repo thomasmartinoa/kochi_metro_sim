@@ -28,6 +28,12 @@ let keysBound = false
  * skin (Cockpit_Component_001) stay.
  */
 const BAKED_CAB = /^(Cockpit_(Component_0(45|47|52)|Control_Button|Display_Screen|Radio_Panel)|Driver_Seat|Bogie_Frame_Assembly)/
+/**
+ * The baked cab's screen faces were joined into the nose shell by material,
+ * so they go by material name: coplanar with the live displays, they would
+ * otherwise fight them for the pixel and win on some frames.
+ */
+const BAKED_SCREENS = /^(M_BlackGlossy_screen|M_cockpit_topscreen)$/
 
 
 export function DriveTrain() {
@@ -266,7 +272,7 @@ export function DriveTrain() {
   return (
     <group ref={group} name="drive-train" visible={false}>
       <group name="drive-car">
-        <CarModel slot={0} parts={carParts} hide={BAKED_CAB} />
+        <CarModel slot={0} parts={carParts} hide={BAKED_CAB} hideMaterial={BAKED_SCREENS} />
         <Cockpit />
       </group>
       <group name="drive-car">

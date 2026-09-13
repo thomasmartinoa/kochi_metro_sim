@@ -58,11 +58,13 @@ export function useCarParts(): Part[][] {
   return useMemo(() => gltfs.map((g) => flattenScene(g.scene)), [gltfs])
 }
 
-function Meshes({ parts, hide }: { parts: Part[]; hide?: RegExp }) {
+function Meshes({ parts, hide, hideMaterial }: { parts: Part[]; hide?: RegExp; hideMaterial?: RegExp }) {
   return (
     <>
       {parts.map((p, i) =>
-        hide?.test(p.name) ? null : <mesh key={i} geometry={p.geometry} material={p.material} />,
+        hide?.test(p.name) || hideMaterial?.test(p.material.name) ? null : (
+          <mesh key={i} geometry={p.geometry} material={p.material} />
+        ),
       )}
     </>
   )
@@ -73,12 +75,23 @@ function Meshes({ parts, hide }: { parts: Part[]; hide?: RegExp }) {
  * leaves out the full-detail parts whose names match (drive mode swaps the
  * leading car's baked-in cab for the live one).
  */
-export function CarModel({ slot, parts, hide }: { slot: 0 | 1 | 2; parts: Part[][]; hide?: RegExp }) {
+export function CarModel({
+  slot,
+  parts,
+  hide,
+  hideMaterial,
+}: {
+  slot: 0 | 1 | 2
+  parts: Part[][]
+  hide?: RegExp
+  /** likewise by material name, for parts the export joined into a node that must stay */
+  hideMaterial?: RegExp
+}) {
   const m = SLOT_MODEL[slot]
   return (
     <Detailed distances={[0, LOD_SWITCH_M]}>
       <group>
-        <Meshes parts={parts[m]} hide={hide} />
+        <Meshes parts={parts[m]} hide={hide} hideMaterial={hideMaterial} />
       </group>
       <group>
         <Meshes parts={parts[3 + m]} />

@@ -4,7 +4,7 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Component, Suspense, lazy, useEffect, type ReactNode } from 'react'
-import type * as THREE from 'three'
+import * as THREE from 'three'
 import { WATER_METRO_ENABLED } from '../config'
 import { stations } from '../data/network'
 import { centerAt, gAt } from '../sim/alignment'
@@ -89,6 +89,7 @@ function DevCam() {
     w.__gl = gl
     w.__scene = scene
     w.__camObj = camera
+    w.__THREE = THREE
     w.__cam = (px: number, py: number, pz: number, tx: number, ty: number, tz: number) => {
       camera.position.set(px, py, pz)
       if (controls?.target && controls.update) {

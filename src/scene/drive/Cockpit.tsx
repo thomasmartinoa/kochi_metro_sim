@@ -74,6 +74,25 @@ const BUTTON_ACTION: Record<string, Action> = {
 const PRESS_M = 0.004
 const PRESS_S = 0.15
 
+/**
+ * The cab's own light. Real desks are backlit: the buttons and the
+ * coloured caps glow softly so they can be found in the dark, and a cabin
+ * lamp over the desk keeps the lever and the switches readable. Both are
+ * held low in daylight and brought up as the ground darkens.
+ */
+const BACKLIT = /^(TextureButtons|TextureRadio)/i
+const CAPS = /^(M_cockpit_green|M_CockpitYellow|M_Bogiebottom_red|M_Cockpit_grey)$/i
+/** emissive strength of the backlit caps by day and by night */
+const GLOW_DAY = 0.35
+const GLOW_NIGHT = 1.1
+/** the cabin lamp, candela, by day and by night */
+const LAMP_DAY = 2.5
+const LAMP_NIGHT = 6
+/** where it hangs: over the front of the desk, in the cab group's frame */
+const LAMP_AT: [number, number, number] = [-1.65, -0.45, -15.0]
+/** the driver's eye (driveCameras COCKPIT) in the cab group's frame */
+const EYE_IN_CAB = new THREE.Vector3(-1.65, -1.28, -15.92)
+
 /** true while the lever is being dragged, so the cab camera does not look around */
 export const cockpitGrab = { active: false }
 
@@ -98,17 +117,32 @@ export function Cockpit() {
   // one instance: materials prepared, screens replaced with canvases
   const built = useMemo(() => {
     const scene = gltf.scene.clone(true)
+    const lit: { m: THREE.MeshStandardMaterial; base: number }[] = []
     scene.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return
       const mats = Array.isArray(o.material) ? o.material : [o.material]
       for (const m of mats) if (m instanceof THREE.MeshStandardMaterial) prepareMetroMaterial(m)
+      // backlit controls: the button textures and the coloured caps emit
+      // their own colour (the strength follows the time of day in useFrame)
+      if (o.material instanceof THREE.MeshStandardMaterial && !lit.some((l) => l.m === o.material)) {
+        const m = o.material
+        if (BACKLIT.test(m.name) && m.map) {
+          m.emissiveMap = m.map
+          m.emissive.set('#FFFFFF')
+          lit.push({ m, base: GLOW_DAY })
+        } else if (CAPS.test(m.name)) {
+          m.emissive.copy(m.color)
+          lit.push({ m, base: GLOW_DAY })
+        }
+      }
       // the cover glass over the displays: the trainset rule makes it a
       // half-silvered mirror of the sky, which is all you would see of the
       // screens. Here it is a faint pane.
       if (o.material instanceof THREE.MeshStandardMaterial && /^M_Cockpit_glass$/i.test(o.material.name)) {
         const g = o.material.clone()
         g.opacity = 0.12
-        g.roughness = 0.2
+        g.roughness = 0.35
+        g.color.set('#2A2E33') // near-black glass: the cabin lamp must not wash the displays out
         g.envMapIntensity = 0.15
         g.depthWrite = false
         o.material = g
@@ -132,13 +166,29 @@ export function Cockpit() {
       tex.offset.set(-u0 / (u1 - u0), -v0 / (v1 - v0))
       const mesh = scene.getObjectByName(spec.node) as THREE.Mesh | undefined
       if (mesh) {
-        // the author's screen faces were exported inside out, hence both sides
-        mesh.material = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, toneMapped: false })
+        // the author's screen faces were exported inside out, hence both
+        // sides; and they lie exactly on the desk's face, so they are pulled
+        // a hair toward the viewer in depth or the desk wins the tie on some
+        // frames (which frame depends on what else the lights recompiled)
+        mesh.material = new THREE.MeshBasicMaterial({
+          map: tex,
+          side: THREE.DoubleSide,
+          toneMapped: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+          polygonOffsetUnits: -4,
+        })
+        mesh.renderOrder = 1
+        // and physically eased 8 mm toward the driver's eye: the desk face
+        // is 7 mm behind the pane and, with the logarithmic depth buffer
+        // (which ignores polygon offset), it won the tie on some frames
+        mesh.position.addScaledVector(EYE_IN_CAB.clone().sub(mesh.position).normalize(), 0.008)
       }
       return { spec, canvas, ctx: canvas.getContext('2d')!, tex, mesh }
     })
-    return { scene, screens }
+    return { scene, screens, lit }
   }, [gltf])
+  const lamp = useRef<THREE.PointLight>(null)
 
   useEffect(() => {
     lever.current = built.scene.getObjectByName(LEVER) ?? null
@@ -205,6 +255,21 @@ export function Cockpit() {
       o.position.copy(p.base)
       if (down) o.position.y -= PRESS_M
     }
+    // From the seat nothing ever stands between the eye and the displays,
+    // so in the cockpit view they skip the depth test outright: the desk
+    // face they sit on is within millimetres and the logarithmic depth
+    // buffer let it win on some frames, which blanked a pane. From outside
+    // the car they test as normal and the bodywork hides them.
+    const inCab = st.view === 'cockpit'
+    for (const sc of built.screens) {
+      const m = sc.mesh?.material as THREE.MeshBasicMaterial | undefined
+      if (m && m.depthTest === inCab) m.depthTest = !inCab
+    }
+    // the cab's light comes up as the day goes: 0 at noon, 1 in the dark
+    const night = THREE.MathUtils.clamp(1 - (groundDim.value - 0.16) / 0.6, 0, 1)
+    if (lamp.current) lamp.current.intensity = THREE.MathUtils.lerp(LAMP_DAY, LAMP_NIGHT, night)
+    const glow = THREE.MathUtils.lerp(GLOW_DAY, GLOW_NIGHT, night)
+    for (const l of built.lit) if (Math.abs(l.m.emissiveIntensity - glow) > 0.01) l.m.emissiveIntensity = glow
     // screens at SCREEN_HZ, dimmed with the cab at night
     if (now - lastDraw.current < 1000 / SCREEN_HZ) return
     lastDraw.current = now
@@ -219,6 +284,8 @@ export function Cockpit() {
   return (
     <group ref={group} position={MOUNT} onPointerDown={onPointerDown}>
       <primitive object={built.scene} />
+      {/* the cabin lamp: warm, short reach, so it lights the desk and nothing outside */}
+      <pointLight ref={lamp} position={LAMP_AT} color="#FFE9C8" intensity={LAMP_DAY} distance={5.5} decay={2} />
     </group>
   )
 }
@@ -233,7 +300,15 @@ function panel(ctx: CanvasRenderingContext2D, spec: ScreenSpec, dim: number) {
   ctx.globalAlpha = 1
   ctx.fillStyle = '#0A1620'
   ctx.fillRect(0, 0, spec.w, spec.h)
-  ctx.globalAlpha = dim
+  void dim
+}
+
+/** the night dimming: a veil over the finished drawing, so no glyph is ever drawn translucent */
+function veil(ctx: CanvasRenderingContext2D, spec: ScreenSpec, dim: number) {
+  if (dim >= 0.999) return
+  ctx.globalAlpha = 1
+  ctx.fillStyle = `rgba(0, 0, 0, ${(1 - dim).toFixed(3)})`
+  ctx.fillRect(0, 0, spec.w, spec.h)
 }
 
 /** right MFD: speed, notch, next stop, doors */
@@ -307,6 +382,7 @@ function drawRight(
   ctx.textAlign = 'right'
   ctx.fillText(headlights ? 'LAMPS ON' : 'LAMPS OFF', spec.w - 24, 300)
   ctx.textAlign = 'left'
+  veil(ctx, spec, dim)
 }
 
 /** centre MFD: curve ahead, signal, schedule, score */
@@ -391,6 +467,7 @@ function drawCentre(
   ctx.font = `500 18px ${FONT}`
   ctx.fillText(`comfort ${Math.round(d.comfort)}%`, spec.w - 24, 296)
   ctx.textAlign = 'left'
+  veil(ctx, spec, dim)
 }
 
 /** the small readout: clock, weather, destination */
@@ -410,5 +487,6 @@ function drawSmall(ctx: CanvasRenderingContext2D, spec: ScreenSpec, d: { dir: 0 
   ctx.fillStyle = '#E8F4FF'
   ctx.font = `600 22px ${FONT}`
   ctx.fillText(d.dir === 0 ? 'TO TRIPUNITHURA' : 'TO ALUVA', 16, 118)
+  veil(ctx, spec, dim)
 }
 
