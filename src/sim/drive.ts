@@ -17,6 +17,9 @@ import { curvatureAtG, gAt, sAtG } from './alignment'
 export const NOTCH_MIN = -5 // -5 = emergency, -4..-1 service brake
 export const NOTCH_MAX = 4 // 1..4 power
 export const LINE_SPEED_KMH = 80
+/** what the motors can do: full effort up to the fade, nothing left at the design speed */
+export const TRACTION_FADE_KMH = 60
+export const DESIGN_KMH = 95
 /** lateral acceleration (m/s²) at which the HUD warns and the cab alarms */
 export const A_LAT_WARN = 1.6
 /** lateral acceleration above which the train is derailing */
@@ -29,6 +32,12 @@ export const BUFFER_KMH = 15
 export const COLLIDE_KMH = 10
 const SPAD_PENALTY = 300
 const BUMP_PENALTY = 100
+/**
+ * A set's reference (gM, or a scheduled train's sKm) is its middle car's
+ * centre; its nose and its tail are a car and a half from there. Contact is
+ * nose to tail, not centre to centre.
+ */
+const HALF_TRAIN_M = MODEL_CAR_PITCH_M * 1.5
 /** the gap left between the player's nose and the train ahead's rear when they touch */
 const COUPLER_GAP_M = 1.0
 /** derailing costs this on top of whatever the run had earned */
@@ -168,12 +177,12 @@ export function withTraffic(
     signalAt: (gM, dir) => signals.signalAhead(base.sAtG(gM), dir, occ[dir]),
     trainAheadG: (gM, dir) => {
       // the rear of the nearest train ahead: its reference is its centre, so
-      // its rear is a car pitch behind that
+      // its rear end is a car and a half behind that
       let best: number | null = null
       for (const t of trains) {
         if (t.dir !== dir) continue
         const centre = base.gAt(t.sKm)
-        const rear = centre + (dir === 0 ? -1 : 1) * MODEL_CAR_PITCH_M
+        const rear = centre + (dir === 0 ? -1 : 1) * HALF_TRAIN_M
         const ahead = dir === 0 ? rear > gM : rear < gM
         if (!ahead) continue
         if (best === null || (dir === 0 ? rear < best : rear > best)) best = rear
@@ -374,8 +383,14 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
   let a = 0
   // a full train is a heavier one: a shade slower to pull away
   const massFactor = 1 - LOAD_ACCEL_PENALTY * st.load
-  if (st.notch > 0) a = (st.notch / NOTCH_MAX) * TRAINSET.accelMs2 * massFactor
-  else if (st.notch === -5) a = -TRAINSET.emergencyBrakeMs2
+  if (st.notch > 0) {
+    a = (st.notch / NOTCH_MAX) * TRAINSET.accelMs2 * massFactor
+    // the traction curve: full pull to TRACTION_FADE_KMH, then the motors
+    // run out of tractive effort and the set tops out at DESIGN_KMH. The
+    // line limit is still the driver's to keep; this is what the train can do.
+    const v = kmh(st.vMs)
+    if (v > TRACTION_FADE_KMH) a *= Math.max(0, (DESIGN_KMH - v) / (DESIGN_KMH - TRACTION_FADE_KMH))
+  } else if (st.notch === -5) a = -TRAINSET.emergencyBrakeMs2
   else if (st.notch < 0) a = (st.notch / 4) * TRAINSET.brakeMs2
   // Adhesion: the rail will only take so much. Ask for more and the wheels
   // slip -- a slide under the brake, wheelspin under power -- and deliver
@@ -395,7 +410,7 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
   // against the one in front, which then sits there until it moves off.
   const aheadG = env.trainAheadG?.(st.gM, st.dir) ?? null
   if (aheadG !== null) {
-    const noseG = st.gM + (st.dir === 0 ? 1 : -1) * MODEL_CAR_PITCH_M
+    const noseG = st.gM + (st.dir === 0 ? 1 : -1) * HALF_TRAIN_M
     const gap = st.dir === 0 ? aheadG - noseG : noseG - aheadG
     if (gap <= COUPLER_GAP_M) {
       if (kmh(st.vMs) > COLLIDE_KMH) {
@@ -405,7 +420,7 @@ export function stepDrive(prev: DriveState, dtSec: number, env: DriveEnv = REAL_
         return rec
       }
       // held against the train ahead
-      st.gM = st.dir === 0 ? aheadG - COUPLER_GAP_M - MODEL_CAR_PITCH_M : aheadG + COUPLER_GAP_M + MODEL_CAR_PITCH_M
+      st.gM = st.dir === 0 ? aheadG - COUPLER_GAP_M - HALF_TRAIN_M : aheadG + COUPLER_GAP_M + HALF_TRAIN_M
       if (prev.vMs > 0 && st.vMs > 0) {
         st.bumps += 1
         st.score -= BUMP_PENALTY

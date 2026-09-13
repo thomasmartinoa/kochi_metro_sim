@@ -112,6 +112,7 @@ function DevCam() {
     w.__replay = (on: boolean) => (on ? useDriveStore.getState().enterReplay() : useDriveStore.getState().leaveReplay())
     w.__replayState = () => ({ ...replay, buffer: undefined, frames: replay.buffer.length, first: replay.buffer.first?.t, last: replay.buffer.last?.t, frozen: replay.buffer.isFrozen })
     w.__replaySeek = (t: number) => { replay.head = t; replay.playing = false }
+    w.__replayFrames = () => { const out: unknown[] = []; for (let t = replay.buffer.first?.t ?? 0; t <= (replay.buffer.last?.t ?? 0); t += 1) out.push(replay.buffer.sampleAt(t)); return out }
     w.__controlsEnabled = () => (controls as { enabled?: boolean } | null)?.enabled
     w.__driveNotch = (n: number) => {
       const d = useDriveStore.getState().drive

@@ -61,6 +61,16 @@ export function ReplayTrain() {
       car.position.set(f.cars[i].p[0], f.cars[i].p[1], f.cars[i].p[2])
       car.quaternion.set(f.cars[i].q[0], f.cars[i].q[1], f.cars[i].q[2], f.cars[i].q[3])
     }
+    // the train ahead, when the tape has it (children 3..5)
+    const other = g.children[3]
+    other.visible = !!f.others && f.others.length === 3
+    if (f.others && f.others.length === 3) {
+      for (let i = 0; i < 3; i++) {
+        const car = other.children[i]
+        car.position.set(f.others[i].p[0], f.others[i].p[1], f.others[i].p[2])
+        car.quaternion.set(f.others[i].q[0], f.others[i].q[1], f.others[i].q[2], f.others[i].q[3])
+      }
+    }
 
     // the camera: the chosen replay view, over a rig built from the tape.
     // The lead car's heading is car0 -> travel; while the wreck tumbles, its
@@ -105,6 +115,18 @@ export function ReplayTrain() {
       </group>
       <group>
         <CarModel slot={2} parts={parts} />
+      </group>
+      {/* the train ahead / the one we hit */}
+      <group visible={false}>
+        <group>
+          <CarModel slot={0} parts={parts} />
+        </group>
+        <group>
+          <CarModel slot={1} parts={parts} />
+        </group>
+        <group>
+          <CarModel slot={2} parts={parts} />
+        </group>
       </group>
     </group>
   )

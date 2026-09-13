@@ -24,6 +24,12 @@ export interface ReplayFrame {
   /** seconds on the replay's own clock */
   t: number
   cars: [CarTransform, CarTransform, CarTransform]
+  /**
+   * The train ahead, when one is close enough to matter (and, after a
+   * collision, the one we hit): its three cars, leading car first. Absent
+   * when nothing is near.
+   */
+  others?: CarTransform[]
   speedKmh: number
   notch: number
   doorsOpen: boolean
@@ -127,12 +133,21 @@ export class ReplayBuffer {
     const a = fr[lo]
     const b = fr[hi]
     const f = b.t === a.t ? 0 : (t - a.t) / (b.t - a.t)
+    const mix = (x: CarTransform, y: CarTransform): CarTransform => ({
+      p: [lerp(x.p[0], y.p[0], f), lerp(x.p[1], y.p[1], f), lerp(x.p[2], y.p[2], f)],
+      q: slerp(x.q, y.q, f),
+    })
+    // the other train is interpolated only while both frames have it
+    const others =
+      a.others && b.others && a.others.length === b.others.length
+        ? a.others.map((x, i) => mix(x, b.others![i]))
+        : f < 0.5
+          ? a.others
+          : b.others
     return {
       t,
-      cars: [0, 1, 2].map((i) => ({
-        p: [lerp(a.cars[i].p[0], b.cars[i].p[0], f), lerp(a.cars[i].p[1], b.cars[i].p[1], f), lerp(a.cars[i].p[2], b.cars[i].p[2], f)],
-        q: slerp(a.cars[i].q, b.cars[i].q, f),
-      })) as ReplayFrame['cars'],
+      cars: [0, 1, 2].map((i) => mix(a.cars[i], b.cars[i])) as ReplayFrame['cars'],
+      ...(others ? { others } : {}),
       speedKmh: lerp(a.speedKmh, b.speedKmh, f),
       notch: f < 0.5 ? a.notch : b.notch,
       doorsOpen: f < 0.5 ? a.doorsOpen : b.doorsOpen,

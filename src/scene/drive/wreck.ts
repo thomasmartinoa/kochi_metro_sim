@@ -16,10 +16,14 @@ export interface CarSnapshot {
 export const wreck = {
   /** the three cars' world transforms on the derail frame, leading car first */
   cars: [] as CarSnapshot[],
-  /** for a collision: the rear car of the train that was hit, in its timetable pose */
-  struck: null as CarSnapshot | null,
-  /** and the velocity it is knocked away with */
-  struckVelocity: new THREE.Vector3(),
+  /**
+   * For a collision: the train that was hit, its three cars (leading car
+   * first) in their timetable poses on the crash frame, and its speed along
+   * its heading. Its rear car goes dynamic; the front two stand.
+   */
+  struck: null as { cars: CarSnapshot[]; speedMs: number; tripId: string } | null,
+  /** the struck train's bodies as plain objects (leading car first), while live */
+  struckBodies: [] as THREE.Object3D[],
   /** the set's velocity on that frame, m/s, world axes */
   velocity: new THREE.Vector3(),
   /** signed curvature at the derail point; the outside of the bend is -sign(kappa) x left */

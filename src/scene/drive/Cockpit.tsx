@@ -53,6 +53,8 @@ const SCREENS: ScreenSpec[] = [
   { node: 'Cockpit_Display_Screen_001', w: 384, h: 144, uv: [0.55, 0.39, 0.83, 1] },
 ]
 const SCREEN_HZ = 10
+/** canvas pixels per content unit: the panes are close to the eye and want the sharpness */
+const DPR = 2
 
 type Action = 'emergency' | 'doors' | 'horn' | 'headlights'
 /** the buttons that do something, picked by their place on the desk at export */
@@ -118,8 +120,8 @@ export function Cockpit() {
       // transpose), so the canvas is allocated sideways and every draw goes
       // through a transposing transform -- see panel()
       const canvas = document.createElement('canvas')
-      canvas.width = spec.h
-      canvas.height = spec.w
+      canvas.width = spec.h * DPR
+      canvas.height = spec.w * DPR
       const tex = new THREE.CanvasTexture(canvas)
       tex.colorSpace = THREE.SRGBColorSpace
       // glTF UVs run top-down; keep the canvas the same way up
@@ -225,8 +227,8 @@ export function Cockpit() {
 function panel(ctx: CanvasRenderingContext2D, spec: ScreenSpec, dim: number) {
   // content (x right, y down) -> canvas (y, x): undoes the pane's transposed
   // UVs; a flipped pane is the same the other way round
-  if (spec.flip) ctx.setTransform(0, -1, -1, 0, spec.h, spec.w)
-  else ctx.setTransform(0, 1, 1, 0, 0, 0)
+  if (spec.flip) ctx.setTransform(0, -DPR, -DPR, 0, spec.h * DPR, spec.w * DPR)
+  else ctx.setTransform(0, DPR, DPR, 0, 0, 0)
   ctx.globalAlpha = 1
   ctx.fillStyle = '#0A1620'
   ctx.fillRect(0, 0, spec.w, spec.h)
@@ -243,61 +245,66 @@ function drawRight(
 ) {
   panel(ctx, spec, dim)
   const kmh = d.vMs * 3.6
-  // speed
-  ctx.fillStyle = d.slipping ? '#FF6B8A' : '#E8F4FF'
-  ctx.font = `700 118px ${DISPLAY}`
-  ctx.textAlign = 'right'
   ctx.textBaseline = 'alphabetic'
-  ctx.fillText(String(Math.round(kmh)), 250, 150)
-  ctx.font = `500 22px ${FONT}`
-  ctx.fillStyle = '#7FA6C0'
+  // --- speed, top left: the number, its unit tucked under it
+  ctx.fillStyle = d.slipping ? '#FF6B8A' : '#E8F4FF'
+  ctx.font = `700 104px ${DISPLAY}`
   ctx.textAlign = 'left'
-  ctx.fillText('km/h', 262, 150)
-  if (d.slipping) {
-    ctx.fillStyle = '#FF6B8A'
-    ctx.font = `700 22px ${DISPLAY}`
-    ctx.fillText('WHEEL SLIP', 262, 118)
-  }
-  // notch bar: brake to the left, power to the right
-  const bx = 290
-  const by = 60
+  ctx.fillText(String(Math.round(kmh)), 24, 112)
+  ctx.font = `500 18px ${FONT}`
+  ctx.fillStyle = d.slipping ? '#FF6B8A' : '#7FA6C0'
+  ctx.fillText(d.slipping ? 'WHEEL SLIP' : 'km/h', 26, 140)
+  // --- notch, top right: brake cells to the left, power to the right
+  const cells = NOTCH_MAX - NOTCH_MIN + 1
+  const cw = 18
+  const bx = spec.w - 24 - cells * cw
+  const by = 44
   for (let n = NOTCH_MIN; n <= NOTCH_MAX; n++) {
-    const x = bx + (n - NOTCH_MIN) * 20
+    const x = bx + (n - NOTCH_MIN) * cw
     const on = n < 0 ? d.notch <= n && d.notch < 0 : n > 0 ? d.notch >= n : false
-    ctx.fillStyle = n === 0 ? '#2B3F50' : on ? (n < 0 ? '#FF9A3C' : '#38E1B6') : '#1B2A38'
-    ctx.fillRect(x, by, 14, 36)
+    ctx.fillStyle = n === 0 ? '#2B3F50' : on ? (n < 0 ? (n === NOTCH_MIN ? '#FF3B5C' : '#FF9A3C') : '#38E1B6') : '#1B2A38'
+    ctx.fillRect(x, by, cw - 4, 30)
   }
   ctx.fillStyle = '#7FA6C0'
-  ctx.font = `500 16px ${FONT}`
-  ctx.fillText('BRAKE', bx, by + 58)
-  ctx.textAlign = 'right'
-  ctx.fillText('POWER', bx + (NOTCH_MAX - NOTCH_MIN + 1) * 20 - 6, by + 58)
+  ctx.font = `500 14px ${FONT}`
   ctx.textAlign = 'left'
+  ctx.fillText('BRAKE', bx, by + 50)
+  ctx.textAlign = 'right'
+  ctx.fillText('POWER', bx + cells * cw - 4, by + 50)
   ctx.fillStyle = '#E8F4FF'
-  ctx.font = `700 30px ${DISPLAY}`
-  ctx.fillText(d.notch === -5 ? 'EMERG' : d.notch > 0 ? `P${d.notch}` : d.notch < 0 ? `B${-d.notch}` : 'N', bx, by + 96)
-  // next stop
+  ctx.font = `700 34px ${DISPLAY}`
+  ctx.fillText(d.notch === NOTCH_MIN ? 'EMERG' : d.notch > 0 ? `P${d.notch}` : d.notch < 0 ? `B${-d.notch}` : 'N', spec.w - 24, 140)
+  // --- rule
+  ctx.fillStyle = '#1B2A38'
+  ctx.fillRect(24, 162, spec.w - 48, 2)
+  // --- next stop
   const target = stations[d.nextStopOrder]
+  ctx.textAlign = 'left'
   ctx.fillStyle = '#7FA6C0'
-  ctx.font = `500 16px ${FONT}`
-  ctx.fillText('NEXT', 24, 205)
+  ctx.font = `500 14px ${FONT}`
+  ctx.fillText('NEXT STOP', 24, 192)
   ctx.fillStyle = '#E8F4FF'
   ctx.font = `600 30px ${DISPLAY}`
-  ctx.fillText(target ? target.name : 'END OF LINE', 24, 238)
+  ctx.fillText(target ? target.name : 'END OF LINE', 24, 226)
   if (target) {
     const dist = Math.max(0, d.distToNextM)
     const need = brakingDistanceM(d.vMs, d.adhesion)
+    ctx.font = `600 24px ${FONT}`
+    ctx.fillStyle = '#E8F4FF'
+    ctx.fillText(dist >= 1000 ? `${(dist / 1000).toFixed(2)} km` : `${Math.round(dist)} m`, 24, 262)
+    ctx.textAlign = 'right'
+    ctx.font = `500 16px ${FONT}`
     ctx.fillStyle = dist < need ? '#FF9A3C' : '#7FA6C0'
-    ctx.font = `500 22px ${FONT}`
-    ctx.fillText(`${dist >= 1000 ? (dist / 1000).toFixed(1) + ' km' : Math.round(dist) + ' m'}   brake ${Math.round(need)} m`, 24, 272)
+    ctx.fillText(`brake point ${Math.round(need)} m`, spec.w - 24, 262)
+    ctx.textAlign = 'left'
   }
-  // doors + lamps
-  ctx.font = `600 18px ${FONT}`
+  // --- doors and lamps, bottom row
+  ctx.font = `600 16px ${FONT}`
   ctx.fillStyle = d.doorsOpen ? '#FF9A3C' : '#38E1B6'
-  ctx.fillText(d.doorsOpen ? '◐ DOORS OPEN' : '● DOORS CLOSED', 24, 304)
+  ctx.fillText(d.doorsOpen ? '◐ DOORS OPEN' : '● DOORS CLOSED', 24, 300)
   ctx.fillStyle = headlights ? '#F5E9B8' : '#3B5063'
   ctx.textAlign = 'right'
-  ctx.fillText(headlights ? 'LAMPS ON' : 'LAMPS OFF', spec.w - 24, 304)
+  ctx.fillText(headlights ? 'LAMPS ON' : 'LAMPS OFF', spec.w - 24, 300)
   ctx.textAlign = 'left'
 }
 
@@ -385,21 +392,23 @@ function drawCentre(
   ctx.textAlign = 'left'
 }
 
-/** the small readout: clock and weather */
+/** the small readout: clock, weather, destination */
 function drawSmall(ctx: CanvasRenderingContext2D, spec: ScreenSpec, d: { dir: 0 | 1 }, dim: number) {
   panel(ctx, spec, dim)
   const { daySec } = istDayTime(useSimStore.getState().epochMs)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = '#38E1B6'
-  ctx.font = `700 76px ${DISPLAY}`
-  ctx.fillText(fmtTime(daySec), 16, 96)
+  ctx.font = `700 60px ${DISPLAY}`
+  ctx.fillText(fmtTime(daySec), 16, 70)
   ctx.fillStyle = '#7FA6C0'
-  ctx.font = `500 26px ${FONT}`
+  ctx.font = `500 20px ${FONT}`
   ctx.textAlign = 'right'
-  ctx.fillText(useSimStore.getState().weather.toUpperCase(), spec.w - 16, 60)
-  ctx.fillText(d.dir === 0 ? 'TO TRIPUNITHURA' : 'TO ALUVA', spec.w - 16, 100)
+  ctx.fillText(useSimStore.getState().weather.toUpperCase(), spec.w - 16, 70)
   ctx.textAlign = 'left'
+  ctx.fillStyle = '#E8F4FF'
+  ctx.font = `600 22px ${FONT}`
+  ctx.fillText(d.dir === 0 ? 'TO TRIPUNITHURA' : 'TO ALUVA', 16, 118)
 }
 
 useGLTF.preload(URL, '/draco/')

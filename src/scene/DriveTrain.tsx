@@ -11,13 +11,14 @@ import { MODEL_CAR_PITCH_M } from '../data/trainset'
 import { carPoseAt, curvatureAtG, gAt, sAtG, trackOffsetBy } from '../sim/alignment'
 import { VIEWS } from '../sim/driveCameras'
 import { Cockpit } from './drive/Cockpit'
+import { traffic } from './drive/traffic'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { CarModel, useCarParts } from './MetroTrain'
 import { groundDim } from './TileGround'
 import { replay } from './drive/replay'
 import { rig } from './drive/rig'
-import { wreck } from './drive/wreck'
+import { wreck, type CarSnapshot } from './drive/wreck'
 
 const CAR_LEN = MODEL_CAR_PITCH_M
 let keysBound = false
@@ -34,6 +35,7 @@ export function DriveTrain() {
 
   const pose = useMemo(() => ({ pos: new THREE.Vector3(), heading: new THREE.Vector3() }), [])
   const tmp = useMemo(() => new THREE.Vector3(), [])
+  const tmpQ = useMemo(() => new THREE.Quaternion(), [])
   const carParts = useCarParts()
 
   // keyboard controls (module flag prevents StrictMode double-binding)
@@ -152,16 +154,34 @@ export function DriveTrain() {
           .multiplyScalar((d.derail?.speedKmh ?? 0) / 3.6)
         wreck.kappa = curvatureAtG(gAt(d.sKm))
         wreck.lateralMs2 = d.lateralMs2
-        // a collision: the car we hit comes off too, from where the timetable has it
+        // a collision: the train we hit is part of the wreck, from where the
+        // timetable has it this frame (Trains publishes it as traffic.ahead)
         wreck.struck = null
         if (d.derail?.cause === 'collision' && d.derail.struckRearG !== undefined) {
-          // the struck car's centre is half a pitch beyond its rear
-          const centreG = d.derail.struckRearG + (d.dir === 0 ? 1 : -1) * (MODEL_CAR_PITCH_M / 2)
-          carPoseAt(sAtG(centreG), d.dir, pose)
-          const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), pose.heading)
-          wreck.struck = { position: pose.pos.clone(), quaternion: q }
-          // it leaves at a fraction of our speed, along the line
-          wreck.struckVelocity.copy(pose.heading).multiplyScalar(((d.derail.speedKmh ?? 0) / 3.6) * 0.45)
+          const t = traffic.ahead
+          if (t) {
+            wreck.struck = {
+              tripId: t.tripId,
+              speedMs: t.speedMs,
+              cars: t.cars.map((c) => ({
+                position: c.getWorldPosition(new THREE.Vector3()),
+                quaternion: c.getWorldQuaternion(new THREE.Quaternion()),
+              })),
+            }
+          } else {
+            // no train published (should not happen): rebuild its pose from the sim
+            const cars: CarSnapshot[] = []
+            for (let c = 0; c < 3; c++) {
+              // the rear car's centre is half a pitch beyond the tail; the others a pitch further each
+              const centreG = d.derail.struckRearG + (d.dir === 0 ? 1 : -1) * (MODEL_CAR_PITCH_M * (2.5 - c))
+              carPoseAt(sAtG(centreG), d.dir, pose)
+              cars.push({
+                position: pose.pos.clone(),
+                quaternion: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), pose.heading),
+              })
+            }
+            wreck.struck = { tripId: '', speedMs: 0, cars }
+          }
         }
         wreck.lead.copy(lead.position)
         wreck.atMs = performance.now()
@@ -189,13 +209,23 @@ export function DriveTrain() {
     if (!useDriveStore.getState().replaying) {
       replay.clock += Math.min(dt, 0.1)
       const src = d.phase === 'derailed' ? (wreck.live ? wreck.bodies : null) : group.current.children
+      // the train ahead rides along on the tape, so a collision replays
+      // against the train that was actually there
+      const others =
+        d.phase === 'derailed'
+          ? wreck.live && wreck.struckBodies.length === 3
+            ? wreck.struckBodies
+            : null
+          : traffic.ahead?.cars ?? null
+      const xf = (o: THREE.Object3D) => ({
+        p: o.getWorldPosition(tmp).toArray() as [number, number, number],
+        q: o.getWorldQuaternion(tmpQ).toArray() as [number, number, number, number],
+      })
       if (src && src.length === 3) {
         replay.buffer.push({
           t: replay.clock,
-          cars: [0, 1, 2].map((i) => {
-            const o = src[i] as THREE.Object3D
-            return { p: o.position.toArray() as [number, number, number], q: o.quaternion.toArray() as [number, number, number, number] }
-          }) as never,
+          cars: [0, 1, 2].map((i) => xf(src[i] as THREE.Object3D)) as never,
+          ...(others ? { others: others.map(xf) } : {}),
           speedKmh: d.phase === 'derailed' ? 0 : d.vMs * 3.6,
           notch: d.notch,
           doorsOpen: d.doorsOpen,

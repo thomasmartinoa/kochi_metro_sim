@@ -65,13 +65,31 @@ const CAR_BOX_LEN = MODEL_CAR_PITCH_M * 0.92
 /** spawn a hair above the deck so nothing starts the sim already penetrating */
 const SPAWN_LIFT_M = 0.05
 /**
- * Collision groups: cars collide with the structure, never with each other
- * (the joints hold them; contacts between coupled bodies only add noise).
+ * Collision groups: our cars collide with the structure and with the train
+ * we hit, never with each other (the joints hold them; contacts between
+ * coupled bodies only add noise). The struck train likewise.
  */
 const GROUP_CAR = 0
 const GROUP_STRUCTURE = 1
-const CARS = interactionGroups([GROUP_CAR], [GROUP_STRUCTURE])
-const STRUCTURE = interactionGroups([GROUP_STRUCTURE], [GROUP_CAR])
+const GROUP_OTHER = 2
+const CARS = interactionGroups([GROUP_CAR], [GROUP_STRUCTURE, GROUP_OTHER])
+// the struck train's cars do collide with each other: its rear car is shoved
+// into the standing car ahead of it and has to crumple or fold sideways, not
+// pass through it
+const OTHER = interactionGroups([GROUP_OTHER], [GROUP_STRUCTURE, GROUP_CAR, GROUP_OTHER])
+const STRUCTURE = interactionGroups([GROUP_STRUCTURE], [GROUP_CAR, GROUP_OTHER])
+/**
+ * A collision is not a derailment: the set keeps its momentum and the
+ * contact with the train ahead does the damage. A small sideways nudge on
+ * the leading car seeds the jackknife, and the seam lifts a little as the
+ * couplers ride up.
+ */
+/** the struck train has its brakes on: it is shoved, not sent rolling */
+const STRUCK_BRAKE_DAMPING = 1.6
+const STRUCK_FRICTION = 0.9
+const COLLISION_SIDE_MS = 1.4
+const COLLISION_LIFT_MS = 0.9
+const COLLISION_YAW = 0.35
 
 function Deck({ gM }: { gM: number }) {
   const slabs = useMemo(() => {
@@ -119,15 +137,35 @@ function Coupler({ a, b }: { a: RefObject<RapierRigidBody | null>; b: RefObject<
 }
 
 /** Steps the world by hand (slow motion first), publishes the lead car for the camera. */
-function LeadTracker({ body, bodies }: { body: RefObject<RapierRigidBody | null>; bodies: RefObject<RapierRigidBody | null>[] }) {
+function LeadTracker({
+  body,
+  bodies,
+  struck,
+}: {
+  body: RefObject<RapierRigidBody | null>
+  bodies: RefObject<RapierRigidBody | null>[]
+  struck: RefObject<RapierRigidBody | null>[] | null
+}) {
   const { step } = useRapier()
   const acc = useRef(0)
   const proxies = useMemo(() => bodies.map(() => new THREE.Object3D()), [bodies])
+  const struckProxies = useMemo(() => (struck ?? []).map(() => new THREE.Object3D()), [struck])
   useEffect(() => {
     wreck.simT = 0
+    // the proxies start in the spawn poses, so the tape never sees a frame
+    // of bodies at the origin before the first step has mirrored them
+    proxies.forEach((o, i) => {
+      const c = wreck.cars[i]
+      if (c) o.position.copy(c.position), o.quaternion.copy(c.quaternion)
+    })
+    struckProxies.forEach((o, i) => {
+      const c = wreck.struck?.cars[i]
+      if (c) o.position.copy(c.position), o.quaternion.copy(c.quaternion)
+    })
     // the bodies are in the world from here: the plain cars may hide now
     wreck.live = true
     wreck.bodies = proxies
+    wreck.struckBodies = struckProxies
     // fixed 1/60 steps: the accumulator keeps it frame-rate independent
     wreck.advance = (dt: number) => {
       acc.current += dt
@@ -139,21 +177,24 @@ function LeadTracker({ body, bodies }: { body: RefObject<RapierRigidBody | null>
       const t = body.current?.translation()
       if (t) wreck.lead.set(t.x, t.y, t.z)
       // mirror the bodies' transforms onto plain objects the replay can read
-      bodies.forEach((b, i) => {
+      const mirror = (b: RefObject<RapierRigidBody | null>, o: THREE.Object3D) => {
         const rb = b.current
         if (!rb) return
         const p = rb.translation()
         const q = rb.rotation()
-        proxies[i].position.set(p.x, p.y, p.z)
-        proxies[i].quaternion.set(q.x, q.y, q.z, q.w)
-      })
+        o.position.set(p.x, p.y, p.z)
+        o.quaternion.set(q.x, q.y, q.z, q.w)
+      }
+      bodies.forEach((b, i) => mirror(b, proxies[i]))
+      struck?.forEach((b, i) => mirror(b, struckProxies[i]))
     }
     return () => {
       wreck.advance = null
       wreck.live = false
       wreck.bodies = []
+      wreck.struckBodies = []
     }
-  }, [step, body, bodies, proxies])
+  }, [step, body, bodies, proxies, struck, struckProxies])
   useFrame((_, dt) => {
     if (wreck.simT >= SETTLE_S) return
     const scale = wreck.simT < SLOW_S ? SLOW_SCALE : 1
@@ -166,10 +207,24 @@ function Cars() {
   const parts = useCarParts()
   const refs = useMemo(() => [0, 1, 2].map(() => createRef<RapierRigidBody>()), [])
   const initial = useMemo(() => {
+    const travel = wreck.velocity.clone().normalize()
+    if (wreck.struck) {
+      // a collision: straight on, into the train ahead; the physics takes it
+      // from there. The nudge picks a side so the set folds rather than
+      // stacking up dead straight.
+      const side = Math.random() < 0.5 ? -1 : 1
+      const sideways = leftOf(travel).multiplyScalar(side)
+      return LIFT_BY_CAR.map((lift, i) => ({
+        lin: wreck.velocity
+          .clone()
+          .addScaledVector(sideways, i === 0 ? COLLISION_SIDE_MS : 0)
+          .add(new THREE.Vector3(0, COLLISION_LIFT_MS * lift, 0)),
+        ang: new THREE.Vector3(0, i === 0 ? side * COLLISION_YAW : 0, 0),
+      }))
+    }
     // never less than a real shove, however marginal the excess: a derailment
     // that merely slides to a halt reads as a bug, not a crash
     const excess = Math.max(1.2, wreck.lateralMs2 - A_LAT_DERAIL)
-    const travel = wreck.velocity.clone().normalize()
     // the outside of the bend: opposite the side it turns toward
     const side = -Math.sign(wreck.kappa || 1)
     const outward = leftOf(travel).multiplyScalar(side)
@@ -182,6 +237,12 @@ function Cars() {
         .add(new THREE.Vector3(0, LIFT_PER_EXCESS * excess * lift, 0)),
       ang: ang.clone().multiplyScalar(0.6 + 0.4 * lift),
     }))
+  }, [])
+  const struckRefs = useMemo(() => [0, 1, 2].map(() => createRef<RapierRigidBody>()), [])
+  const struckVel = useMemo(() => {
+    if (!wreck.struck) return new THREE.Vector3()
+    // along its own heading, at the timetable's speed
+    return new THREE.Vector3(0, 0, 1).applyQuaternion(wreck.struck.cars[2].quaternion).multiplyScalar(wreck.struck.speedMs)
   }, [])
   return (
     <>
@@ -212,32 +273,38 @@ function Cars() {
       ))}
       <Coupler a={refs[0]} b={refs[1]} />
       <Coupler a={refs[1]} b={refs[2]} />
-      {wreck.struck && (
-        // the rear car of the train we hit: knocked forward and off its
-        // rails, colliding with the structure like ours do
-        <RigidBody
-          name="struck-car"
-          type="dynamic"
-          position={[wreck.struck.position.x, wreck.struck.position.y + SPAWN_LIFT_M, wreck.struck.position.z]}
-          quaternion={wreck.struck.quaternion.toArray() as [number, number, number, number]}
-          linearVelocity={[wreck.struckVelocity.x, wreck.struckVelocity.y + 0.8, wreck.struckVelocity.z]}
-          angularVelocity={[0, 0.3, 0]}
-          linearDamping={0.05}
-          angularDamping={0.25}
-          colliders={false}
-        >
-          <CuboidCollider
-            args={[TRAINSET.widthM / 2, TRAINSET.heightM / 2, CAR_BOX_LEN / 2]}
-            position={[0, TRAINSET.heightM / 2, 0]}
-            mass={CAR_MASS_KG}
-            friction={CAR_FRICTION}
-            restitution={0.05}
-            collisionGroups={CARS}
-          />
-          <CarModel slot={2} parts={parts} />
-        </RigidBody>
-      )}
-      <LeadTracker body={refs[0]} bodies={refs} />
+      {wreck.struck &&
+        // the train we hit: three coupled cars of the same weight as ours,
+        // where the timetable had them, at its speed. Its brakes are on
+        // (the damping), so the shove is a few metres and the rear car,
+        // caught between us and the car ahead of it, is what folds.
+        wreck.struck.cars.map((c, i) => (
+          <RigidBody
+            key={`struck-${i}`}
+            ref={struckRefs[i]}
+            name="struck-car"
+            type="dynamic"
+            position={[c.position.x, c.position.y + SPAWN_LIFT_M, c.position.z]}
+            quaternion={c.quaternion.toArray() as [number, number, number, number]}
+            linearVelocity={[struckVel.x, struckVel.y, struckVel.z]}
+            linearDamping={STRUCK_BRAKE_DAMPING}
+            angularDamping={0.4}
+            colliders={false}
+          >
+            <CuboidCollider
+              args={[TRAINSET.widthM / 2, TRAINSET.heightM / 2, CAR_BOX_LEN / 2]}
+              position={[0, TRAINSET.heightM / 2, 0]}
+              mass={CAR_MASS_KG}
+              friction={STRUCK_FRICTION}
+              restitution={0.05}
+              collisionGroups={OTHER}
+            />
+            <CarModel slot={i as 0 | 1 | 2} parts={parts} />
+          </RigidBody>
+        ))}
+      {wreck.struck && <Coupler a={struckRefs[0]} b={struckRefs[1]} />}
+      {wreck.struck && <Coupler a={struckRefs[1]} b={struckRefs[2]} />}
+      <LeadTracker body={refs[0]} bodies={refs} struck={wreck.struck ? struckRefs : null} />
       <CrashFX />
     </>
   )

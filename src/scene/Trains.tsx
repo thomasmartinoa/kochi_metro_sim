@@ -8,6 +8,8 @@ import * as THREE from 'three'
 import { MODEL_CAR_PITCH_M } from '../data/trainset'
 import { liveTrainStates, type TrainState } from '../sim/engine'
 import { carPoseAt, gAt, trackOffsetBy } from '../sim/alignment'
+import { traffic, TRAFFIC_RANGE_M } from './drive/traffic'
+import { wreck } from './drive/wreck'
 import { useDriveStore } from '../state/useDriveStore'
 import { useSimStore } from '../state/useSimStore'
 import { mat } from './materials'
@@ -71,15 +73,35 @@ export function Trains() {
     const struckG = drive?.derail?.cause === 'collision' ? drive.derail.struckRearG : undefined
     // the trip the player is driving in place of
     const taken = drive ? useDriveStore.getState().takenOverTripId : null
+    // the nearest same-direction train ahead of the player, for the tape and the wreck
+    let aheadIdx = -1
+    let aheadDist = TRAFFIC_RANGE_M
+    if (drive && drive.phase !== 'derailed') {
+      for (let i = 0; i < POOL; i++) {
+        const st = states[i]
+        if (!st || st.dir !== drive.dir || st.tripId === taken) continue
+        const dist = (gAt(st.sKm) - drive.gM) * (drive.dir === 0 ? 1 : -1)
+        if (dist > 0 && dist < aheadDist) {
+          aheadDist = dist
+          aheadIdx = i
+        }
+      }
+    }
+    // while derailed the last published train is the one being hit: keep it
+    if (aheadIdx < 0 && !(drive && drive.phase === 'derailed')) traffic.ahead = null
     for (let i = 0; i < POOL; i++) {
       const g = groupRefs.current[i]
       if (!g) continue
       const st = states[i]
+      // the wreck draws the struck train where it was hit; the timetable's
+      // copy would otherwise carry on down the line without its rear car
       const isStruck =
         struckG !== undefined &&
         st &&
         st.dir === drive!.dir &&
-        Math.abs(gAt(st.sKm) + (st.dir === 0 ? -1 : 1) * CAR_LEN - struckG) < 60
+        (wreck.struck?.tripId
+          ? st.tripId === wreck.struck.tripId
+          : Math.abs(gAt(st.sKm) + (st.dir === 0 ? -1 : 1) * CAR_LEN - struckG) < 60)
       if (!st || isStruck || st.tripId === taken) {
         g.visible = false
         continue
@@ -87,6 +109,9 @@ export function Trains() {
       g.visible = true
       g.userData.tripId = st.tripId
       g.userData.dir = st.dir
+      if (i === aheadIdx) {
+        traffic.ahead = { tripId: st.tripId, cars: [g.children[0], g.children[1], g.children[2]], speedMs: st.speedKmh / 3.6 }
+      }
       // each car sits on its two bogies and chords the curve between them;
       // the cars are spaced along the rail they run on, not the centreline,
       // so the couplers meet round bends (see alignment.ts)

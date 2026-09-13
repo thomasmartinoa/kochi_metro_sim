@@ -54,9 +54,13 @@ const RADIANCE = (sunI: number) => 0.25 + sunI * 0.9
  * modelled interior, so anything you can see through them is empty space.
  * The cab glass is genuinely see-through because there IS a cab behind it.
  */
-const GLASS_OPACITY: { test: RegExp; opacity: number }[] = [
+const GLASS_OPACITY: { test: RegExp; opacity: number; env?: number }[] = [
   { test: /^Glass_bogy$/i, opacity: 0.9 }, // saloon windows — hide the empty shell
-  { test: /^(Glass|M_Cockpit_glass|M_Headlight_glass)$/i, opacity: 0.5 }, // cab + door glazing
+  // the windscreen and cab glazing: driven from behind, so it has to be
+  // nearly clear, and its sky reflection turned well down or the view out
+  // is a milky wash of the sky
+  { test: /^(Glass|M_Cockpit_glass)$/i, opacity: 0.2, env: 0.12 },
+  { test: /^M_Headlight_glass$/i, opacity: 0.5 },
   { test: /glass/i, opacity: 0.72 }, // any other trainset glazing
 ]
 
@@ -245,6 +249,12 @@ export function prepareMetroMaterial(material: THREE.Material): void {
   // them. They just get a gentler share of the sky, because their diffuse
   // lighting is already painted into the texture.
   lightWithSky(m, isBaked ? BAKED_ENV : PBR_ENV)
+  if (glass?.env !== undefined) {
+    m.envMapIntensity = glass.env
+    m.roughness = Math.max(m.roughness, 0.25)
+    const pm = m as THREE.MeshPhysicalMaterial
+    if ('clearcoat' in pm) pm.clearcoat = 0
+  }
   // the surfaces the rain lands on
   if (BODY_SIDES.test(m.name) || BODY_ROOF.test(m.name) || /^Bridge_Baked/i.test(m.name) || /^Deck_Base/i.test(m.name)) {
     wettable.set(m, m.roughness)

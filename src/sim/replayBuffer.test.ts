@@ -39,6 +39,18 @@ describe('replay buffer', () => {
     expect(s.speedKmh).toBe(50)
   })
 
+  it('carries the train ahead through the tape, interpolated while both frames have it', () => {
+    const b = new ReplayBuffer(15)
+    const other = (x: number) => [{ p: [x, 0, 0] as [number, number, number], q: [0, 0, 0, 1] as [number, number, number, number] }]
+    b.push({ ...frame(0), others: other(100) })
+    b.push({ ...frame(1), others: other(110) })
+    b.push(frame(2)) // it has gone out of range
+    expect(b.sampleAt(0.5)!.others![0].p[0]).toBeCloseTo(105)
+    // between a frame with it and one without: whichever is nearer
+    expect(b.sampleAt(1.2)!.others![0].p[0]).toBeCloseTo(110)
+    expect(b.sampleAt(1.8)!.others).toBeUndefined()
+  })
+
   it('clamps sampling to the recorded range', () => {
     const b = new ReplayBuffer(15)
     b.push(frame(5, 100))

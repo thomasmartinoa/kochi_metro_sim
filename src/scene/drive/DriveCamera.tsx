@@ -46,6 +46,9 @@ const LOOK_PITCH = 0.5
 const LOOK_RETURN = 2.5
 /** near plane while seated in the cab, metres */
 const COCKPIT_NEAR = 0.08
+/** seconds a view change takes: the camera flies to the new view rather than cutting */
+const SWITCH_BLEND_S = 0.55
+const smooth = (x: number) => x * x * (3 - 2 * x)
 
 interface ControlsLike {
   target: THREE.Vector3
@@ -60,6 +63,8 @@ export function DriveCamera() {
   const mem = useRef(newCamMemory())
   const lastView = useRef<DriveView | null>(null)
   const look = useRef({ yaw: 0, pitch: 0, dragging: false })
+  /** the pose the camera left on the last view change, blended out over SWITCH_BLEND_S */
+  const blend = useRef({ t: Infinity, eye: new THREE.Vector3(), target: new THREE.Vector3(), fov: 0 })
   const baseFov = useRef(camera.fov)
   const baseNear = useRef(camera.near)
   const v = useMemo(
@@ -123,6 +128,16 @@ export function DriveCamera() {
     const view = useDriveStore.getState().view
     const switched = view !== lastView.current
     if (switched) {
+      // remember where we are so the new view is flown to, not cut to (the
+      // crash drone seeds its own orbit; the first view of a run just appears)
+      if (lastView.current !== null && view !== 'crash' && camera.position.distanceTo(rig.pos) < LOST_M) {
+        blend.current.t = 0
+        blend.current.eye.copy(camera.position)
+        blend.current.target.copy(controls.target)
+        blend.current.fov = camera.fov
+      } else {
+        blend.current.t = Infinity
+      }
       mem.current = newCamMemory()
       // the crash drone picks its orbit up from where the camera IS: no cut
       // (unless the camera is lost, in which case the view maths starts it
@@ -174,6 +189,16 @@ export function DriveCamera() {
     }
     if (Math.abs(camera.fov - pose.fov) > 0.01) {
       camera.fov += (pose.fov - camera.fov) * Math.min(1, dt * 6)
+      camera.updateProjectionMatrix()
+    }
+    // the fly-over from the previous view
+    const b = blend.current
+    if (b.t < SWITCH_BLEND_S) {
+      b.t += dt
+      const k = smooth(Math.min(1, b.t / SWITCH_BLEND_S))
+      camera.position.lerpVectors(b.eye, camera.position, k)
+      controls.target.lerpVectors(b.target, controls.target, k)
+      camera.fov = THREE.MathUtils.lerp(b.fov, camera.fov, k)
       camera.updateProjectionMatrix()
     }
     camera.lookAt(controls.target)

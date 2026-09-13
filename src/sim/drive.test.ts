@@ -8,6 +8,7 @@ import {
   curveLimitKmh,
   DERAIL_HOLD_S,
   grade,
+  LINE_SPEED_KMH,
   LOOKAHEAD_M,
   newDrive,
   restartFromLastStop,
@@ -73,8 +74,8 @@ describe('drive physics', () => {
 
   it('never brakes for the driver: full power past 85 km/h keeps accelerating', () => {
     let st = setNotch(ready(0), 4)
-    st = run(st, 30) // ~100 km/h by now on the synthetic straight
-    expect(st.vMs * 3.6).toBeGreaterThan(85)
+    st = run(st, 30) // past the line limit by now on the synthetic straight
+    expect(st.vMs * 3.6).toBeGreaterThan(LINE_SPEED_KMH)
     const before = st.vMs
     st = run(st, 5)
     expect(st.notch).toBe(4)
@@ -422,17 +423,30 @@ describe('signals and the train ahead', () => {
     expect(st.derail!.cause).toBe('collision')
     expect(st.derail!.speedKmh).toBeGreaterThan(10)
 
-    let slow: DriveState = { ...ready(0, env), gM: 380, phase: 'run', vMs: 2 } // 7 km/h
+    // our nose is a car and a half ahead of gM: start with it 10 m short of the tail
+    let slow: DriveState = { ...ready(0, env), gM: 400 - 1.5 * MODEL_CAR_PITCH_M - 10, phase: 'run', vMs: 2 } // 7 km/h
     const before = slow.score
     slow = run(slow, 20, env)
     expect(slow.phase).toBe('run')
     expect(slow.vMs).toBe(0) // stopped against the train ahead
+    // held nose to tail, not driven into it
+    expect(slow.gM + 1.5 * MODEL_CAR_PITCH_M).toBeLessThanOrEqual(400)
+    expect(slow.gM + 1.5 * MODEL_CAR_PITCH_M).toBeGreaterThan(400 - 2)
     expect(slow.score).toBe(before - 100)
     expect(slow.bumps).toBe(1)
   })
 })
 
 // ---------------------------------------------------------------- 6f ----
+
+describe('traction', () => {
+  it('the motors run out at the design speed: flat out on the straight, the set tops out under 100 km/h', () => {
+    let st = setNotch(ready(0), 4)
+    st = run(st, 400)
+    expect(st.vMs * 3.6).toBeGreaterThan(80) // the line limit is not a governor
+    expect(st.vMs * 3.6).toBeLessThan(96)
+  })
+})
 
 describe('weather and adhesion', () => {
   it('braking distance stretches once adhesion falls below what the service brake asks', () => {
