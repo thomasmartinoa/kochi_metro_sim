@@ -10,19 +10,24 @@
  * arrive. Depth precision across the 1 m..60 km view range is handled globally
  * by the canvas's logarithmic depth buffer (see World.tsx).
  */
-import { useTexture } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
+import { useKTX2Texture } from './gltf'
 import * as THREE from 'three'
 import meta from '../data/kochi-overlay-meta.json'
 import { project } from '../sim/projection'
 
-const OVERLAY_URL = '/textures/kochi-overlay.webp'
+/**
+ * KTX2/Basis (scripts: `ktx create --encode basis-lz` from the WebP): the
+ * 4096x4884 image decoded to 100 MB of texture memory as WebP and stays ~13 MB
+ * compressed on the GPU, at the same resolution.
+ */
+const OVERLAY_URL = '/textures/kochi-overlay.ktx2'
 /** ~1 m under the streamed tiles (-0.35) so they cleanly cover it. */
 const GROUND_Y = -1.5
 
 export function SatGround() {
-  const tex = useTexture(OVERLAY_URL)
   const gl = useThree((s) => s.gl)
+  const tex = useKTX2Texture(OVERLAY_URL)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.anisotropy = Math.min(8, gl.capabilities.getMaxAnisotropy())
 
@@ -39,4 +44,3 @@ export function SatGround() {
   )
 }
 
-useTexture.preload(OVERLAY_URL)

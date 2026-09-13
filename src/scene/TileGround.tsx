@@ -21,6 +21,7 @@ import { LODRaycast, MapProvider, MapView, UnitsUtils } from 'geo-three'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { M_PER_DEG_LAT, ORIGIN_LAT, ORIGIN_LON } from '../sim/projection'
+import { firstLoad } from './firstLoad'
 
 /** Ground brightness 0..1, driven by Atmosphere's day/night keyframes. */
 export const groundDim = { value: 1 }
@@ -33,11 +34,27 @@ export const groundDim = { value: 1 }
  * a real quiet period, not a transient dip to 0 between LOD waves while the
  * camera is still resolving the view.
  */
-const tileLoad = { pending: 0, loaded: 0, lastBusyAt: 0 }
+const tileLoad = { pending: 0, loaded: 0, lastBusyAt: 0, leaves: 0, bare: 0 }
 const MIN_TILES = 6
-const STABLE_MS = 600
+const STABLE_MS = 800
+/**
+ * Rays the LOD casts per frame while the opening view streams in. geo-three
+ * refines the map by casting ONE random ray a frame and subdividing whatever
+ * it hits, so a static view takes many seconds to reach its final detail —
+ * and in the gaps nothing is pending, so "quiet" was true long before the
+ * view was finished and the veil lifted onto coarse tiles. Cast a lot more
+ * while the loader is up, so the whole view refines within a few frames.
+ */
+const FIRST_LOAD_RAYS = 24
+/**
+ * The opening view is settled when every tile currently being drawn has its
+ * texture (`bare` counts drawn leaves still waiting on one), nothing is in
+ * flight, and it has stayed that way for a moment.
+ */
 export function tilesSettled(): boolean {
   return (
+    tileLoad.leaves >= MIN_TILES &&
+    tileLoad.bare === 0 &&
     tileLoad.loaded >= MIN_TILES &&
     tileLoad.pending === 0 &&
     performance.now() - tileLoad.lastBusyAt >= STABLE_MS
@@ -115,14 +132,23 @@ export function TileGround() {
     }
   }, [])
 
-  // Tint tiles with the day/night ground brightness + texture quality niceties.
+  // Tint tiles with the day/night ground brightness + texture quality niceties,
+  // and take the census the loader gates on.
   useFrame(() => {
     if (!built) return
+    ;(built.map.lod as LODRaycast).subdivisionRays = firstLoad.ready ? 1 : FIRST_LOAD_RAYS
+    let leaves = 0
+    let bare = 0
     built.map.traverse((o) => {
-      const mesh = o as THREE.Mesh
-      if (!mesh.isMesh) return
+      const mesh = o as THREE.Mesh & { level?: number }
+      // a map node that is currently drawn (subdivided parents drop isMesh)
+      if (!mesh.isMesh || mesh.level === undefined) return
+      leaves++
       const m = mesh.material as THREE.MeshBasicMaterial
-      if (!m || !m.map) return
+      if (!m || !m.map) {
+        bare++
+        return
+      }
       if (!m.userData.tuned) {
         m.userData.tuned = true
         m.map.anisotropy = 8
@@ -136,6 +162,8 @@ export function TileGround() {
       const d = groundDim.value
       if (m.color.r !== d) m.color.setScalar(d)
     })
+    tileLoad.leaves = leaves
+    tileLoad.bare = bare
   })
 
   if (!built) return null

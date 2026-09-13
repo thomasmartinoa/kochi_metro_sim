@@ -5,12 +5,16 @@
 import { waterRoutes } from '../sim/waterEngine'
 import { useSimStore } from '../state/useSimStore'
 import { DrivePanel } from './DrivePanel'
+import { ExploreStrip } from './ExploreStrip'
 import { InfoPanel } from './InfoPanel'
 import { Legend } from './Legend'
 import { ModeSwitcher } from './ModeSwitcher'
 import { RoutePlanner } from './RoutePlanner'
 import { StationList } from './StationList'
 import { TimeControls } from './TimeControls'
+import { TouchControls } from './TouchControls'
+import { LandscapeHint } from './LandscapeHint'
+import { TOUCH_QUERY, useMediaQuery } from './useMediaQuery'
 import { RoutesRail } from './water/RoutesRail'
 import { WaterInfoPanel } from './water/WaterInfoPanel'
 import { WaterPlanner } from './water/WaterPlanner'
@@ -68,9 +72,10 @@ export function HUD() {
   const explore = appMode === 'explore'
   const drive = appMode === 'drive' && !water
   const tracker = appMode === 'tracker' || (water && appMode === 'drive')
+  const touch = useMediaQuery(TOUCH_QUERY)
 
   return (
-    <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4">
+    <div className="pointer-events-none absolute inset-0 flex select-none flex-col justify-between p-4 max-sm:p-3">
       <div className="flex min-h-0 flex-1 items-start justify-between gap-4 pb-4">
         <div className="flex h-full min-h-0 flex-col gap-3">
           <Brand water={water} />
@@ -80,12 +85,14 @@ export function HUD() {
             </div>
           )}
         </div>
-        <div className="absolute left-1/2 top-4 -translate-x-1/2">
+        {/* the switcher sits above everything; below lg the panel column starts
+            under it instead of sliding beneath it (which ate its clicks) */}
+        <div className="absolute left-1/2 top-4 z-10 -translate-x-1/2 max-sm:top-3">
           <ModeSwitcher />
         </div>
-        <div className="flex max-h-full flex-col items-end gap-3 overflow-y-auto">
+        <div className="flex max-h-full max-w-full flex-col items-end gap-3 overflow-y-auto max-lg:pt-12">
           {drive ? (
-            <DrivePanel />
+            <DrivePanel compact={touch} />
           ) : (
             <>
               {water ? <WaterInfoPanel /> : <InfoPanel />}
@@ -104,14 +111,19 @@ export function HUD() {
           )}
         </div>
       </div>
+      {drive && touch && <TouchControls />}
+      {drive && <LandscapeHint />}
       <div className="relative flex items-end justify-between gap-4">
         <div className="hidden lg:block">{tracker && (water ? <WaterLegend /> : <Legend />)}</div>
         {!drive && (
-          <div className="absolute left-1/2 bottom-0 w-full max-w-xl -translate-x-1/2">
-            <TimeControls />
+          <div className="absolute left-1/2 bottom-0 flex w-full max-w-xl -translate-x-1/2 flex-col items-center gap-2">
+            {explore && !water && <ExploreStrip />}
+            <div className="w-full">
+              <TimeControls />
+            </div>
           </div>
         )}
-        <div className="ml-auto self-end text-right font-display text-[10px] leading-tight tracking-wide text-paper-dim/70">
+        <div className={`ml-auto self-end text-right font-display text-[10px] leading-tight tracking-wide text-paper-dim/70 ${drive && touch ? 'hidden' : ''}`}>
           Contains data provided by Kochi Metro Rail Limited
           <br />
           Map data © OpenStreetMap contributors

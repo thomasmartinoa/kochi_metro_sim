@@ -3,21 +3,34 @@
  */
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { Component, Suspense, useEffect, type ReactNode } from 'react'
-import type * as THREE from 'three'
-import overlayMeta from '../data/kochi-overlay-meta.json'
-import { centerAt } from '../sim/alignment'
-import { project } from '../sim/projection'
-import { useDriveStore } from '../state/useDriveStore'
+import { Component, Suspense, lazy, useEffect, type ReactNode } from 'react'
+import * as THREE from 'three'
+import { WATER_METRO_ENABLED } from '../config'
+import { stations } from '../data/network'
+import { centerAt, gAt } from '../sim/alignment'
+import { stepDrive } from '../sim/drive'
+import { trainStateById } from '../sim/engine'
+import { liveEnv, useDriveStore } from '../state/useDriveStore'
+import { useRunHistory } from '../state/runHistory'
 import { useSimStore } from '../state/useSimStore'
-import { mat } from './materials'
 import { Atmosphere } from './Atmosphere'
 import { Boats } from './Boats'
-import { CameraRig } from './CameraRig'
+import { CameraController } from './CameraController'
 import { City, Palms } from './City'
 import { CityGLB } from './CityGLB'
 import { DriveTrain } from './DriveTrain'
-import { KeyboardFly } from './KeyboardFly'
+import { DriveCamera } from './drive/DriveCamera'
+import { ReplayTrain } from './drive/ReplayTrain'
+import { CabSounds } from './drive/CabSounds'
+import { SpeedBoards } from './drive/SpeedBoards'
+import { Signals } from './drive/Signals'
+import { Rain } from './drive/Rain'
+import { GhostTrain } from './drive/GhostTrain'
+import { GltfSetup } from './gltf'
+import { REVERSED_DEPTH } from './depth'
+import { replay } from './drive/replay'
+import { wreck } from './drive/wreck'
+import { HorizonHaze } from './HorizonHaze'
 import { Line3D } from './Line3D'
 import { PinkLine } from './PinkLine'
 import { PostFX } from './PostFX'
@@ -38,74 +51,27 @@ class CityBoundary extends Component<{ children: ReactNode }, { failed: boolean 
   }
 }
 
+const DriveWreck = lazy(() => import('./drive/DriveWreck'))
+
+/**
+ * The physics world, for as long as Drive mode is open. Rapier and its WASM
+ * live in this chunk and its init suspends, so it gets a Suspense boundary
+ * of its own: the metro layer above must not blink out while it loads.
+ */
+function WreckGate() {
+  const driving = useSimStore((s) => s.appMode === 'drive')
+  if (!driving) return null
+  return (
+    <Suspense fallback={null}>
+      <DriveWreck />
+    </Suspense>
+  )
+}
+
 /** Advances the shared sim clock once per frame. */
 function ClockTick() {
   useFrame((_, dt) => {
     useSimStore.getState().tick(Math.min(dt, 0.25) * 1000)
-  })
-  return null
-}
-
-/* ============================================================================
- * CAMERA LIMITS — adjust these to taste.
- *   MIN_CAM_Y   : lowest the eye may sit (metres). Stops going under the map.
- *   MAX_CAM_Y   : highest the eye may sit (metres). Stops flying too high with
- *                 Q/E. Lower it for a tighter ceiling.
- *   MAP_INSET_M : how far INSIDE the aerial map's edge the camera must stay
- *                 (metres). Raise it to keep the border further out of frame.
- *   maxDistance (on <OrbitControls> below): how far you can zoom/dolly out.
- *                 Beyond it the aerial map's edge shows.
- * ==========================================================================*/
-const MIN_CAM_Y = 8
-const MAX_CAM_Y = 2600
-const MAP_INSET_M = 1500
-
-/** Horizontal walls, derived from the real aerial sheet's bounds. */
-const MAP_BOUNDS = (() => {
-  const nw = project(overlayMeta.north, overlayMeta.west)
-  const se = project(overlayMeta.south, overlayMeta.east)
-  return {
-    minX: Math.min(nw.x, se.x) + MAP_INSET_M,
-    maxX: Math.max(nw.x, se.x) - MAP_INSET_M,
-    minZ: Math.min(nw.z, se.z) + MAP_INSET_M,
-    maxZ: Math.max(nw.z, se.z) - MAP_INSET_M,
-  }
-})()
-
-const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
-
-/**
- * Keeps the camera inside the map. OrbitControls' polar limit and maxDistance
- * only bound orbiting/dollying; WASD+Q/E flight (KeyboardFly) can still push the
- * eye under the map, arbitrarily high, or off the sheet entirely — so clamp all
- * three axes here every frame. The orbit target moves with the eye so the view
- * direction never snaps. Drive mode owns its own camera (cab sits low on purpose).
- */
-function CameraBounds() {
-  const camera = useThree((s) => s.camera)
-  const controls = useThree((s) => s.controls) as {
-    target?: THREE.Vector3
-    update?: () => void
-  } | null
-  useFrame(() => {
-    if (useSimStore.getState().appMode === 'drive') return
-    const p = camera.position
-    const nx = clamp(p.x, MAP_BOUNDS.minX, MAP_BOUNDS.maxX)
-    const ny = clamp(p.y, MIN_CAM_Y, MAX_CAM_Y)
-    const nz = clamp(p.z, MAP_BOUNDS.minZ, MAP_BOUNDS.maxZ)
-    if (nx === p.x && ny === p.y && nz === p.z) return
-    const dx = nx - p.x
-    const dy = ny - p.y
-    const dz = nz - p.z
-    p.set(nx, ny, nz)
-    if (controls?.target && controls.update) {
-      controls.target.set(
-        controls.target.x + dx,
-        controls.target.y + dy,
-        controls.target.z + dz,
-      )
-      controls.update()
-    }
   })
   return null
 }
@@ -123,6 +89,7 @@ function DevCam() {
     w.__gl = gl
     w.__scene = scene
     w.__camObj = camera
+    w.__THREE = THREE
     w.__cam = (px: number, py: number, pz: number, tx: number, ty: number, tz: number) => {
       camera.position.set(px, py, pz)
       if (controls?.target && controls.update) {
@@ -137,10 +104,49 @@ function DevCam() {
     w.__select = (kind: 'train' | 'station' | null, id?: string) => {
       useSimStore.getState().select(kind && id ? { kind, id } : null)
     }
+    w.__setDaySec = (s: number) => useSimStore.getState().scrubToDaySec(s)
+    w.__setWeather = (x: string) => useSimStore.getState().setWeather(x as never)
+    w.__runHistory = useRunHistory
+    w.__trainSKm = (id: string) => trainStateById(useSimStore.getState().epochMs, id)?.sKm
     w.__drive = () => useDriveStore.getState().drive
+    w.__driveView = (v: string) => useDriveStore.getState().setView(v as never)
+    w.__driveViewNow = () => useDriveStore.getState().view
+    w.__driveRestart = () => useDriveStore.getState().restart()
+    w.__replay = (on: boolean) => (on ? useDriveStore.getState().enterReplay() : useDriveStore.getState().leaveReplay())
+    w.__replayState = () => ({ ...replay, buffer: undefined, frames: replay.buffer.length, first: replay.buffer.first?.t, last: replay.buffer.last?.t, frozen: replay.buffer.isFrozen })
+    w.__replaySeek = (t: number) => { replay.head = t; replay.playing = false }
+    w.__replayFrames = () => { const out: unknown[] = []; for (let t = replay.buffer.first?.t ?? 0; t <= (replay.buffer.last?.t ?? 0); t += 1) out.push(replay.buffer.sampleAt(t)); return out }
+    w.__controlsEnabled = () => (controls as { enabled?: boolean } | null)?.enabled
     w.__driveNotch = (n: number) => {
       const d = useDriveStore.getState().drive
       if (d) useDriveStore.getState().nudgeNotch(n - d.notch)
+    }
+    // where the wreck's lead car is (null until a derail), for tests
+    w.__wreckLead = () => (wreck.ready ? wreck.lead.clone() : null)
+    w.__wreckState = () => ({ ready: wreck.ready, live: wreck.live, simT: wreck.simT, hasAdvance: !!wreck.advance })
+    // advance the wreck by s physics-seconds regardless of frame rate, for tests
+    w.__wreckStep = (s: number) => {
+      if (!wreck.advance) return null // not mounted yet
+      wreck.advance(s)
+      return wreck.simT
+    }
+    // step the drive sim by dt seconds regardless of frame rate, for tests
+    w.__driveStep = (dt: number) => {
+      const d = useDriveStore.getState().drive
+      // the same env the game ticks with: signals and the train ahead included
+      if (d) useDriveStore.setState({ drive: stepDrive(d, dt, liveEnv(d.dir)) })
+    }
+    // teleport the drive to a chainage, at rest, for testing curves and crashes
+    w.__driveJump = (sKm: number) => {
+      const d = useDriveStore.getState().drive
+      if (!d) return
+      // the next stop is the first station past the jump in the direction of travel
+      const idx = stations.findIndex((st) => (d.dir === 0 ? st.sKm > sKm : st.sKm >= sKm))
+      const nextStopOrder = d.dir === 0 ? (idx < 0 ? stations.length - 1 : idx) : Math.max(0, (idx < 0 ? stations.length : idx) - 1)
+      const lastStopOrder = nextStopOrder + (d.dir === 0 ? -1 : 1)
+      useDriveStore.setState({
+        drive: { ...d, gM: gAt(sKm), sKm, vMs: 0, phase: 'run', nextStopOrder, lastStopOrder },
+      })
     }
   }, [camera, controls, gl, scene])
   return null
@@ -153,15 +159,19 @@ export function World() {
   return (
     <Canvas
       shadows={false}
-      dpr={[1, 1.75]}
-      // The world spans 1 m (cab view) to 60 km (whole-region view). A normal
+      dpr={[1, 1.5]}
+      // The world spans 8 cm (cab view) to 60 km (whole-region view). A normal
       // depth buffer spends nearly all its precision near the camera, so at a
       // few km the ground/roads/backdrop are indistinguishable and flicker.
-      // A logarithmic buffer keeps precision usable across the whole range.
-      gl={{ logarithmicDepthBuffer: true }}
+      // Reversed-Z keeps precision across the whole range for free where the
+      // GPU allows it; elsewhere the logarithmic buffer does, at the cost of
+      // early depth testing (see depth.ts).
+      gl={{ reversedDepthBuffer: REVERSED_DEPTH, logarithmicDepthBuffer: !REVERSED_DEPTH }}
       camera={{ position: [mid.pos.x + 210, 130, mid.pos.z + 310], far: 60000, near: 1 }}
       onPointerMissed={() => select(null)}
     >
+      {/* first, so every useGLTF below finds the texture loader ready */}
+      <GltfSetup />
       <color attach="background" args={['#BFDDE2']} />
       {/* Haze thick enough that the aerial sheet dissolves into the sky well
           before its edge (~12 km+ out) can be seen. Paired with the zoom-out
@@ -170,11 +180,10 @@ export function World() {
       <fog attach="fog" args={['#BFDDE2', 1200, 11000]} />
       <Atmosphere />
 
-      {/* Fills the horizon beyond the aerial sheet's ~31 km extent. Kept far
-          below it so it can never win the depth test and sheet over the city. */}
-      <mesh material={mat.ground} rotation={[-Math.PI / 2, 0, 0]} position={[0, -120, 0]}>
-        <planeGeometry args={[60000, 60000]} />
-      </mesh>
+      {/* Fills everything past the aerial sheet's ~31 km extent, ramping from
+          fog colour to sky colour so the ground dissolves into the horizon
+          instead of ending on a line. */}
+      <HorizonHaze />
 
       <CityBoundary>
         <Suspense fallback={<City />}>
@@ -186,17 +195,35 @@ export function World() {
         <SatGround />
       </Suspense>
       <TileGround />
-      <Line3D />
-      <PinkLine />
-      <Trains />
-      <Boats />
-      <WaterTerminals />
-      <WaterRouteLanes />
-      <DriveTrain />
+      {/* the metro models stream in; without their own boundary a suspend here
+          would freeze the entire canvas rather than just the line */}
+      <Suspense fallback={null}>
+        <Line3D />
+        <Trains />
+        <DriveTrain />
+        <DriveCamera />
+        <ReplayTrain />
+        <CabSounds />
+        <WreckGate />
+        <SpeedBoards />
+        <Signals />
+        <Rain />
+        <GhostTrain />
+      </Suspense>
+      {/* Water Metro stays off the map entirely until it ships — routes,
+          terminals and boats alike. It is built on the `water` branch, where
+          VITE_WATER_METRO=true turns all of this back on. The Pink Line goes
+          with it: nothing unbuilt should be visible to visitors. */}
+      {WATER_METRO_ENABLED && (
+        <>
+          <PinkLine />
+          <Boats />
+          <WaterTerminals />
+          <WaterRouteLanes />
+        </>
+      )}
       <ClockTick />
-      <CameraRig />
-      <KeyboardFly />
-      <CameraBounds />
+      <CameraController />
       <DevCam />
       <PostFX />
 
@@ -204,7 +231,9 @@ export function World() {
         makeDefault
         target={[mid.pos.x, 30, mid.pos.z]}
         maxPolarAngle={Math.PI * 0.49}
-        minDistance={60}
+        // close enough to stand beside a trainset; the controller's floor
+        // (MIN_CAM_Y) is what actually keeps the eye above ground
+        minDistance={18}
         // Pulled in to 3.6 km: beyond this the aerial sheet's edge creeps into
         // frame at the top. At this distance the corridor city fills the view
         // and the horizon is already faded to haze/sky.

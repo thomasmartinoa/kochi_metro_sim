@@ -131,3 +131,45 @@ describe('engine', () => {
     expect(gapMin).toBeLessThan(14)
   })
 })
+
+describe('run profile', () => {
+  // a long inter-station run on a full weekday trip, so there is room to cruise
+  function longRun() {
+    const trip = trips.find((t) => t.service === 'WK' && t.dir === 0 && t.stops.length === 25)!
+    let best = { i: 0, len: 0 }
+    for (let i = 0; i < trip.stops.length - 1; i++) {
+      const len = Math.abs(stations[trip.stops[i + 1][0]].sKm - stations[trip.stops[i][0]].sKm)
+      if (len > best.len) best = { i, len }
+    }
+    const [, , dep] = trip.stops[best.i]
+    const [, arr] = trip.stops[best.i + 1]
+    return { trip, dep, arr }
+  }
+  const msAt = (trip: (typeof trips)[number], t: number) => tripStateAt(trip, t)!.speedKmh / 3.6
+
+  it('pulls away at the trainset service acceleration, not an ease curve', () => {
+    const { trip, dep } = longRun()
+    // constant acceleration: the same dv/dt early and a little later in the run
+    const a1 = (msAt(trip, dep + 4) - msAt(trip, dep + 2)) / 2
+    const a2 = (msAt(trip, dep + 10) - msAt(trip, dep + 8)) / 2
+    expect(a1).toBeCloseTo(1.0, 1)
+    expect(a2).toBeCloseTo(1.0, 1)
+  })
+
+  it('brakes into the platform at the trainset service deceleration', () => {
+    const { trip, arr } = longRun()
+    const d1 = (msAt(trip, arr - 2) - msAt(trip, arr - 4)) / 2
+    const d2 = (msAt(trip, arr - 8) - msAt(trip, arr - 10)) / 2
+    expect(d1).toBeCloseTo(-1.1, 1)
+    expect(d2).toBeCloseTo(-1.1, 1)
+  })
+
+  it('holds a steady cruise between the acceleration and the brake', () => {
+    const { trip, dep, arr } = longRun()
+    const T = arr - dep
+    // an ease curve is still climbing at 35% and peaks at 50%; a cruise is flat
+    const v35 = msAt(trip, dep + 0.35 * T)
+    const v50 = msAt(trip, dep + 0.5 * T)
+    expect(Math.abs(v35 - v50)).toBeLessThan(0.05)
+  })
+})

@@ -1,17 +1,18 @@
 /**
  * Left rail: all 25 stations as a tappable line diagram (English + Malayalam).
  */
+import { WATER_METRO_ENABLED } from '../config'
 import { stations } from '../data/network'
 import { useSimStore } from '../state/useSimStore'
 
+/** Interchange badges. Unbuilt networks stay hidden behind their own flag. */
 const INTERCHANGE: Record<string, string> = {
   ALVA: 'Terminal',
   KLMT: 'Indian Railways',
   TNHL: 'Indian Railways',
   ERSH: 'Indian Railways',
-  VYTA: 'Water Metro',
-  JLSD: 'Pink Line 2027',
   TPHT: 'Terminal · IR',
+  ...(WATER_METRO_ENABLED ? { VYTA: 'Water Metro', JLSD: 'Pink Line 2027' } : {}),
 }
 
 export function StationList() {

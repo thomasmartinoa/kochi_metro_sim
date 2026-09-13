@@ -65,7 +65,9 @@ function TrainPanel({ id }: { id: string }) {
       </div>
     )
   }
-  const next = stations[st.nextStationOrder]
+  // while dwelling, nextStationOrder is already the one AFTER this platform;
+  // the station the train is standing in is prevStationOrder
+  const at = stations[st.phase === 'dwell' ? st.prevStationOrder : st.nextStationOrder]
   const dest = st.dir === 0 ? stations[stations.length - 1] : stations[0]
 
   return (
@@ -79,7 +81,7 @@ function TrainPanel({ id }: { id: string }) {
       <div className="flex flex-col gap-2 px-4 py-3">
         <Row
           label={st.phase === 'dwell' ? 'AT STATION' : 'NEXT STATION'}
-          value={next.name}
+          value={at.name}
         />
         <Row
           label="ARRIVES"

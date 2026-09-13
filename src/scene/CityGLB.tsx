@@ -9,10 +9,13 @@
  * app's equirectangular latitude scale (111320 vs true ~110574 m/deg).
  */
 import { useGLTF } from '@react-three/drei'
+import { DRACO_PATH, withKTX2 } from './gltf'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
 import { project } from '../sim/projection'
+import { lightWithSky } from './metroMaterials'
+import { applyWaterLook } from './waterLook'
 
 const CITY_URL = '/models/kochi-city-v2.glb?v=5'
 /** Blosm geo origin of the map_7 scene this GLB was exported from. */
@@ -29,14 +32,17 @@ const LAT_STRETCH = 111320 / 111319.49
 
 /** Facade materials with emissive night windows — driven by Atmosphere. */
 export const cityEmissives: THREE.MeshStandardMaterial[] = []
+/** The backwaters, so Atmosphere can hand them a sky to reflect. */
+export const cityWater: THREE.MeshStandardMaterial[] = []
 
 export function CityGLB() {
-  const { scene } = useGLTF(CITY_URL, '/draco/')
+  const { scene } = useGLTF(CITY_URL, DRACO_PATH, undefined, withKTX2)
 
   const gl = useThree((s) => s.gl)
 
   useEffect(() => {
     cityEmissives.length = 0
+    cityWater.length = 0
     const maxAniso = gl.capabilities.getMaxAnisotropy()
     scene.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return
@@ -58,10 +64,35 @@ export function CityGLB() {
           m.emissiveIntensity = 0
           cityEmissives.push(m)
         }
+        if (m.name === 'KochiWater') {
+          // The surface arrives as a near-mirror (roughness 0.12) with nothing
+          // to break it up, so each light landed as one hard blob and the mesh's
+          // own triangulation showed as patches of tone across the bay.
+          // applyWaterLook flattens the normals and puts the authored wave
+          // normal map back at a scale that survives mipmapping, which is what
+          // scatters the sun into a glitter path; it also owns transparency,
+          // because alpha is a per-pixel fresnel term rather than a constant.
+          // The tint stays light so the imagery underneath keeps supplying the
+          // real colour and shoreline instead of a painted-on slab.
+          m.roughness = 0.18
+          m.metalness = 0.0
+          // a broad sky reflection is most of what makes water read as water
+          lightWithSky(m, 0.75)
+          if (!o.geometry.boundingBox) o.geometry.computeBoundingBox()
+          const bb = o.geometry.boundingBox!
+          applyWaterLook(
+            m,
+            o.geometry,
+            Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z),
+            Math.min(8, maxAniso),
+          )
+          cityWater.push(m)
+        }
       }
     })
     return () => {
       cityEmissives.length = 0
+      cityWater.length = 0
     }
   }, [scene, gl])
 
@@ -69,4 +100,3 @@ export function CityGLB() {
   return <primitive object={scene} position={[x, 0, z]} scale={[1, 1, LAT_STRETCH]} />
 }
 
-useGLTF.preload(CITY_URL, '/draco/')

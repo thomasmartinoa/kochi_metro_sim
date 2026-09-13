@@ -90,7 +90,7 @@ export function TimeControls() {
         className="scrubber w-full"
         min={0}
         max={86399}
-        step={30}
+        step={1}
         value={Math.floor(daySec)}
         onChange={(e) => scrubToDaySec(+e.target.value)}
         aria-label="Time of day"

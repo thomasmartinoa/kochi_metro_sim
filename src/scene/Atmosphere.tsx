@@ -9,10 +9,12 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { istDayTime } from '../sim/clock'
-import { useSimStore } from '../state/useSimStore'
+import { useSimStore, type Weather } from '../state/useSimStore'
 import { cityEmissives } from './CityGLB'
 import { groundDim } from './TileGround'
 import { mat } from './materials'
+import { setWetness, updateSkyEnv } from './metroMaterials'
+import { animateWater } from './waterLook'
 
 interface Key {
   h: number
@@ -36,6 +38,33 @@ const KEYS: Key[] = [
   { h: 24, sky: '#0B1A2B', fog: '#0B1A2B', sun: 0.04, hemi: 0.34, sunColor: '#7C90B8' },
 ]
 
+/**
+ * The scene used to carry a second directional light opposite the sun, to fill
+ * the shadowed side of things. A directional light also puts a specular
+ * highlight on every glossy surface, so on the backwaters it drew a **second
+ * sun glitter path** — a bright streak with no sun above it. There is one sun.
+ *
+ * That fill is folded into the hemisphere light instead: it lights from sky and
+ * ground the same way, but contributes only irradiance, so it adds no highlight
+ * of its own. This factor is what the removed light used to be worth.
+ */
+const HEMI_FILL = 1.28
+
+/**
+ * What each weather does to the light and the air. `sun` and `hemi` scale
+ * the day-cycle values; `fogNear`/`fogFar` scale the haze distances (fog
+ * pulls them right in); `sky` desaturates and darkens the dome.
+ */
+const WEATHER_LOOK: Record<Weather, { sun: number; hemi: number; fogNear: number; fogFar: number; grey: number; wet: number }> = {
+  clear: { sun: 1, hemi: 1, fogNear: 1, fogFar: 1, grey: 0, wet: 0 },
+  overcast: { sun: 0.35, hemi: 1.05, fogNear: 0.7, fogFar: 0.75, grey: 0.55, wet: 0.15 },
+  rain: { sun: 0.22, hemi: 0.9, fogNear: 0.45, fogFar: 0.5, grey: 0.7, wet: 0.8 },
+  monsoon: { sun: 0.12, hemi: 0.75, fogNear: 0.12, fogFar: 0.22, grey: 0.85, wet: 1 },
+  fog: { sun: 0.4, hemi: 0.95, fogNear: 0.015, fogFar: 0.045, grey: 0.8, wet: 0.4 },
+}
+/** how fast the look crosses between weathers, per second */
+const WEATHER_BLEND = 0.6
+
 interface SkyUniforms {
   sunPosition: { value: THREE.Vector3 }
   turbidity: { value: number }
@@ -46,6 +75,7 @@ interface SkyUniforms {
 export function Atmosphere() {
   const scene = useThree((s) => s.scene)
   const camera = useThree((s) => s.camera)
+  const gl = useThree((s) => s.gl)
   const sunRef = useRef<THREE.DirectionalLight>(null)
   const hemiRef = useRef<THREE.HemisphereLight>(null)
   const skyRef = useRef<THREE.Mesh<THREE.BoxGeometry, THREE.ShaderMaterial>>(null)
@@ -61,8 +91,17 @@ export function Atmosphere() {
     [],
   )
   const sunDir = useMemo(() => new THREE.Vector3(), [])
+  /** the current weather look, eased so a change rolls in rather than snaps */
+  const look = useRef({ ...WEATHER_LOOK.clear })
 
-  useFrame(() => {
+  useFrame((state, dt) => {
+    // weather: ease the look toward the chosen one, then apply it on top of the day cycle
+    const want = WEATHER_LOOK[useSimStore.getState().weather]
+    const lk = look.current
+    const kw = Math.min(1, Math.min(dt, 0.1) * WEATHER_BLEND)
+    for (const key of Object.keys(lk) as (keyof typeof lk)[]) lk[key] += (want[key] - lk[key]) * kw
+    setWetness(lk.wet)
+
     const { daySec } = istDayTime(useSimStore.getState().epochMs)
     const h = daySec / 3600
     let i = 0
@@ -73,9 +112,16 @@ export function Atmosphere() {
 
     cols.sky.copy(cols.a.set(a.sky)).lerp(cols.b.set(b.sky), f)
     cols.fog.copy(cols.a.set(a.fog)).lerp(cols.b.set(b.fog), f)
+    // grey weather: pull the sky and haze toward a flat overcast
+    if (lk.grey > 0.001) {
+      const g = (cols.sky.r + cols.sky.g + cols.sky.b) / 3
+      cols.a.setRGB(g * 0.92, g * 0.94, g * 0.96)
+      cols.sky.lerp(cols.a, lk.grey)
+      cols.fog.lerp(cols.a, lk.grey)
+    }
     cols.sun.copy(cols.a.set(a.sunColor)).lerp(cols.b.set(b.sunColor), f)
-    const sunI = THREE.MathUtils.lerp(a.sun, b.sun, f)
-    const hemiI = THREE.MathUtils.lerp(a.hemi, b.hemi, f)
+    const sunI = THREE.MathUtils.lerp(a.sun, b.sun, f) * lk.sun
+    const hemiI = THREE.MathUtils.lerp(a.hemi, b.hemi, f) * lk.hemi
 
     // sun path: rises east 06:00, sets west 18:00, slight southern declination
     const ang = ((h - 6) / 12) * Math.PI
@@ -89,8 +135,8 @@ export function Atmosphere() {
       // haze hides the map edge at street level but thins out from the air
       const alt = Math.max(0, camera.position.y)
       const fog = scene.fog as THREE.Fog
-      fog.near = 4500 + alt * 2.4
-      fog.far = 19000 + alt * 4.0
+      fog.near = (4500 + alt * 2.4) * lk.fogNear
+      fog.far = (19000 + alt * 4.0) * lk.fogFar
     }
 
     // sky dome: follow the sun, thicken haze toward dawn/dusk, hide at night
@@ -110,10 +156,17 @@ export function Atmosphere() {
       sunRef.current.intensity = sunI
       sunRef.current.color.copy(cols.sun)
     }
-    if (hemiRef.current) hemiRef.current.intensity = hemiI
+    if (hemiRef.current) hemiRef.current.intensity = hemiI * HEMI_FILL
 
     // unlit streamed satellite tiles follow the scene's light level
     groundDim.value = THREE.MathUtils.clamp(0.08 + hemiI * 0.58 + sunI * 0.22, 0.16, 1)
+
+    // drift the backwater ripples (HorizonHaze reads fog/background itself)
+    animateWater(state.clock.elapsedTime)
+
+    // metal on the authored metro models needs a sky to reflect, and so does
+    // water — a broad sky reflection is most of what makes it read as water
+    updateSkyEnv(gl, cols.sky, cols.fog, sunI)
 
     // night glow: train windows + platform light strips + brighter tusk LEDs
     const night = THREE.MathUtils.clamp((0.55 - sunI) / 0.55, 0, 1)
@@ -137,9 +190,10 @@ export function Atmosphere() {
         mieCoefficient={0.005}
         mieDirectionalG={0.82}
       />
+      {/* Sky and ground bounce. This carries all the fill now — see HEMI_FILL. */}
       <hemisphereLight ref={hemiRef} args={['#DFF3F0', '#5C6B58', 1.1]} />
+      {/* The one and only sun. */}
       <directionalLight ref={sunRef} position={[4000, 6000, -2500]} intensity={1.6} color="#FFF4DC" />
-      <directionalLight position={[-3500, 2600, 4000]} intensity={0.4} color="#DCEFF5" />
     </>
   )
 }

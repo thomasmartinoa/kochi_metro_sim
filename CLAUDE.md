@@ -32,6 +32,7 @@ npm run dev      # dev server (localhost:5173)
 npm test         # vitest (sim engines) — must stay green
 npm run build    # production build
 npm run gtfs     # re-parse data/gtfs/*.txt -> src/data/gtfs.json
+node scripts/ktx-assets.mjs   # GPU-compress GLB textures to KTX2 (needs KTX-Software 4.4+ `ktx` on PATH)
 ```
 
 ## Architecture
@@ -62,11 +63,15 @@ The sim layer is deterministic and unit-tested; keep react/three out of it.
   Kochi Metro Rail Limited" is a licence requirement — keep it in the footer.
 - **Water**: no official GTFS. `scripts/gen-water-schedule.mjs` synthesises a
   deterministic timetable from published service patterns → `src/data/water.json`.
-- **City**: `public/models/kochi-city-v2.glb` (Draco+WebP). Built from a Blosm
+- **Textures in every GLB are KTX2/Basis** (`scripts/ktx-assets.mjs`): they
+  stay compressed on the GPU (~4-8x less video memory than WebP, which decodes
+  to raw RGBA). Loaded through `src/scene/gltf.ts` (`withKTX2`); the Blender
+  exports still produce WebP, run the script after `build-metro-assets`.
+- **City**: `public/models/kochi-city-v2.glb` (Draco+KTX2). Built from a Blosm
   Blender scene via `scripts/blender_export_city_v2.py`. Bump the `?v=` cache
   key in `src/scene/CityGLB.tsx` after re-exporting.
 - **Ground**: streaming Esri tiles (`TileGround.tsx`); a static aerial overlay
-  (`SatGround.tsx` + `public/textures/kochi-overlay.webp`) sits under them as an
+  (`SatGround.tsx` + `public/textures/kochi-overlay.ktx2`) sits under them as an
   offline/instant fallback.
 
 ## Coordinates — the one thing that bites everyone
