@@ -6,7 +6,7 @@
 import { ReplayBuffer } from '../../sim/replayBuffer'
 
 export const replay = {
-  buffer: new ReplayBuffer(15, 30),
+  buffer: new ReplayBuffer(30, 30),
   /** seconds of drive time recorded so far; the buffer's clock */
   clock: 0,
   /** playback head, in buffer time */

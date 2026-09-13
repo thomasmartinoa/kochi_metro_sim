@@ -17,12 +17,25 @@ import { curvatureAtG, gAt, sAtG } from './alignment'
 export const NOTCH_MIN = -5 // -5 = emergency, -4..-1 service brake
 export const NOTCH_MAX = 4 // 1..4 power
 export const LINE_SPEED_KMH = 80
-/** what the motors can do: full effort up to the fade, nothing left at the design speed */
-export const TRACTION_FADE_KMH = 60
-export const DESIGN_KMH = 95
+/**
+ * What the motors can do: full effort up to the fade, nothing left at the
+ * design speed. The Metropolis is built for 90 km/h and run at 80; on the
+ * flat it will still creep past the line limit, and into the first curve
+ * it meets too fast.
+ */
+export const TRACTION_FADE_KMH = 55
+export const DESIGN_KMH = 92
 /** lateral acceleration (m/s²) at which the HUD warns and the cab alarms */
 export const A_LAT_WARN = 1.6
-/** lateral acceleration above which the train is derailing */
+/**
+ * What a posted restriction allows: railways sign curves for about 1 m/s²
+ * of unbalanced lateral acceleration (cant deficiency of ~100 mm on
+ * standard gauge, a little more for a metro), which passengers just notice.
+ * The board is therefore well inside the overturning speed: a 40 km/h curve
+ * overturns at about 59.
+ */
+export const A_LAT_POSTED = 1.2
+/** lateral acceleration above which the train is derailing (overturning the outer wheels) */
 export const A_LAT_DERAIL = 2.6
 /** it must stay above the limit this long — a blip at a curve entry is survivable with the brake */
 export const DERAIL_HOLD_S = 0.6
@@ -116,8 +129,18 @@ export const REAL_ENV: DriveEnv = {
   ],
 }
 
-/** The speed a curve of curvature kappa (1/m) can be taken at; Infinity on the straight. */
+/**
+ * The posted speed for a curve of curvature kappa (1/m): the restriction a
+ * board would carry, from the unbalanced lateral acceleration a railway
+ * signs for (A_LAT_POSTED). Infinity on the straight.
+ */
 export function curveLimitKmh(kappa: number): number {
+  const k = Math.abs(kappa)
+  return k < 1e-6 ? Infinity : 3.6 * Math.sqrt(A_LAT_POSTED / k)
+}
+
+/** The speed at which the same curve overturns the set (A_LAT_DERAIL). */
+export function curveDerailKmh(kappa: number): number {
   const k = Math.abs(kappa)
   return k < 1e-6 ? Infinity : 3.6 * Math.sqrt(A_LAT_DERAIL / k)
 }
@@ -150,7 +173,7 @@ function restrictionAhead(leadG: number, dir: 0 | 1, env: DriveEnv): Restriction
   for (let d = 0; d <= LOOKAHEAD_M; d += LOOKAHEAD_STEP_M) {
     const kappa = env.curvatureAtG(leadG + (dir === 0 ? d : -d))
     const limitKmh = curveLimitKmh(kappa)
-    if (limitKmh >= LINE_SPEED_KMH) continue
+    if (limitKmh >= LINE_SPEED_KMH - 10) continue // as speedLimits: only signed curves
     if (!best || limitKmh < best.limitKmh) {
       best = { limitKmh, distM: d, radiusM: 1 / Math.abs(kappa) }
     }

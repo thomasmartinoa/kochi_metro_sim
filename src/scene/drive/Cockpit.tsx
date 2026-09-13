@@ -350,7 +350,7 @@ function drawCentre(
     const over = kmh > d.ahead.limitKmh
     ctx.fillStyle = over ? '#FF9A3C' : '#E8F4FF'
     ctx.font = `700 44px ${DISPLAY}`
-    ctx.fillText(`${d.ahead.limitKmh}`, 24, 166)
+    ctx.fillText(`${Math.round(d.ahead.limitKmh)}`, 24, 166)
     ctx.font = `500 20px ${FONT}`
     ctx.fillStyle = '#7FA6C0'
     ctx.fillText(`km/h · R${Math.round(d.ahead.radiusM)} m · ${d.ahead.distM > 0 ? Math.round(d.ahead.distM) + ' m' : 'IN CURVE'}`, 110, 166)

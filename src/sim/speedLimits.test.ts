@@ -13,13 +13,16 @@ const ENV: DriveEnv = {
 describe('curve restrictions', () => {
   it('finds each stretch under line speed with its limit rounded down to 5', () => {
     const r = curveRestrictions(ENV, 0, 3000)
-    expect(r).toHaveLength(1) // the 200 m curve allows ~82 km/h: no restriction
+    // both curves are posted below line speed: 39 -> 35 on the 100 m, 55 on the 200 m
+    expect(r).toHaveLength(2)
     expect(r[0].fromG).toBeGreaterThanOrEqual(990)
     expect(r[0].fromG).toBeLessThanOrEqual(1010)
     expect(r[0].toG).toBeGreaterThanOrEqual(1290)
     expect(r[0].toG).toBeLessThanOrEqual(1310)
-    expect(r[0].limitKmh).toBe(55)
+    expect(r[0].limitKmh).toBe(35)
     expect(r[0].radiusM).toBeCloseTo(100, 0)
+    expect(r[1].limitKmh).toBe(55)
+    expect(r[1].radiusM).toBeCloseTo(200, 0)
   })
 
   it('merges two restrictions separated by a short straight', () => {

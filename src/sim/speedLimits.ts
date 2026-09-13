@@ -15,6 +15,8 @@ export interface SpeedRestriction {
 }
 
 const STEP_M = 10
+/** boards are only worth planting when they take the driver well below line speed */
+const UNSIGNED_MARGIN_KMH = 10
 /** two restrictions closer than this are one board */
 const MERGE_GAP_M = 40
 /**
@@ -35,7 +37,8 @@ export function curveRestrictions(
   for (let g = fromG; g <= toG; g += STEP_M) {
     const kappa = env.curvatureAtG(g)
     const limit = curveLimitKmh(kappa)
-    if (limit >= lineKmh) continue
+    // a curve posted within a notch of line speed is not signed; it is line speed
+    if (limit >= lineKmh - UNSIGNED_MARGIN_KMH) continue
     const radiusM = 1 / Math.abs(kappa)
     if (open && g - open.toG <= MERGE_GAP_M) {
       open.toG = g

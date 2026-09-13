@@ -3,6 +3,8 @@ import { stations } from '../data/network'
 import { MODEL_CAR_PITCH_M } from '../data/trainset'
 import {
   A_LAT_DERAIL,
+  A_LAT_POSTED,
+  curveDerailKmh,
   brakingDistanceM,
   BUFFER_KMH,
   curveLimitKmh,
@@ -74,7 +76,7 @@ describe('drive physics', () => {
 
   it('never brakes for the driver: full power past 85 km/h keeps accelerating', () => {
     let st = setNotch(ready(0), 4)
-    st = run(st, 30) // past the line limit by now on the synthetic straight
+    st = run(st, 45) // past the line limit by now on the synthetic straight (0-80 takes ~40 s)
     expect(st.vMs * 3.6).toBeGreaterThan(LINE_SPEED_KMH)
     const before = st.vMs
     st = run(st, 5)
@@ -125,10 +127,14 @@ describe('drive physics', () => {
 })
 
 describe('derailment', () => {
-  it('limit on a 100 m curve is 58 km/h, and the straight has none', () => {
-    expect(curveLimitKmh(1 / 100)).toBeCloseTo(3.6 * Math.sqrt(A_LAT_DERAIL * 100), 1)
-    expect(Math.round(curveLimitKmh(1 / 100))).toBe(58)
+  it('a 100 m curve is posted at 39 km/h and overturns the set at 58; the straight has neither', () => {
+    expect(curveLimitKmh(1 / 100)).toBeCloseTo(3.6 * Math.sqrt(A_LAT_POSTED * 100), 1)
+    expect(Math.round(curveLimitKmh(1 / 100))).toBe(39)
+    expect(curveDerailKmh(1 / 100)).toBeCloseTo(3.6 * Math.sqrt(A_LAT_DERAIL * 100), 1)
+    expect(Math.round(curveDerailKmh(1 / 100))).toBe(58)
     expect(curveLimitKmh(0)).toBe(Infinity)
+    // the margin between the board and the overturn is what a real board carries
+    expect(curveDerailKmh(1 / 100) / curveLimitKmh(1 / 100)).toBeCloseTo(Math.sqrt(A_LAT_DERAIL / A_LAT_POSTED), 5)
   })
 
   it('a train under the limit takes the curve', () => {
@@ -149,8 +155,9 @@ describe('derailment', () => {
     const d = st.derail!
     expect(d.cause).toBe('curve')
     expect(d.radiusM).toBeCloseTo(100, 0)
-    expect(Math.round(d.limitKmh)).toBe(58)
-    expect(d.speedKmh).toBeGreaterThan(58)
+    // the record carries the posted speed the driver ignored
+    expect(Math.round(d.limitKmh)).toBe(39)
+    expect(d.speedKmh).toBeGreaterThan(58) // and it took the overturning speed to do it
     expect(d.lastStopOrder).toBe(0)
     // the leading car is a car pitch ahead of the reference; it derailed a
     // hold-time into the curve, not at its mouth
@@ -241,7 +248,7 @@ describe('curve lookahead', () => {
     let st: DriveState = { ...ready(0, CURVE_100), gM: 700, phase: 'run', vMs: 10 }
     st = stepDrive(st, 0.05, CURVE_100)
     expect(st.ahead).not.toBeNull()
-    expect(Math.round(st.ahead!.limitKmh)).toBe(58)
+    expect(Math.round(st.ahead!.limitKmh)).toBe(39) // the posted speed, not the overturning one
     // the curve starts at 1000 m; the leading car is a car pitch ahead of gM
     expect(st.ahead!.distM).toBeGreaterThan(1000 - 700 - MODEL_CAR_PITCH_M - 20)
     expect(st.ahead!.distM).toBeLessThan(1000 - 700 - MODEL_CAR_PITCH_M + 20)
