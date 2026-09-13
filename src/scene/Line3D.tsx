@@ -14,6 +14,7 @@
  * ones — a single InstancedMesh spanning 28 km would always draw all ~900.
  */
 import { Text, useGLTF } from '@react-three/drei'
+import { DRACO_PATH, withKTX2 } from './gltf'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import labelFont from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff?url'
@@ -30,7 +31,7 @@ const SPANS_PER_CHUNK = 24
 /** Flattened (geometry, material) pairs of a loaded GLB, in world-space of the model. */
 function useParts(url: string) {
   // '/draco/' — Draco-compressed assets; the local decoder avoids a CDN fetch.
-  const { scene } = useGLTF(url, '/draco/')
+  const { scene } = useGLTF(url, DRACO_PATH, undefined, withKTX2)
   return useMemo(() => {
     const parts: { geometry: THREE.BufferGeometry; material: THREE.Material }[] = []
     scene.updateMatrixWorld(true)
@@ -227,5 +228,3 @@ export function Line3D() {
   )
 }
 
-useGLTF.preload(SPAN_URL, '/draco/')
-useGLTF.preload(STATION_URL, '/draco/')

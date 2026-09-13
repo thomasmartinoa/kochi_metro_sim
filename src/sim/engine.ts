@@ -162,11 +162,17 @@ export function trainStatesAt(t: number, service: ServiceId): TrainState[] {
  * Also includes yesterday's post-midnight tail trips (times > 24h in GTFS).
  */
 export function liveTrainStates(epochMs: number): TrainState[] {
+  // the scene, the signals and the drive sim all ask for the same instant
+  // several times a frame; every trip is walked once per instant
+  if (epochMs === liveCache.epochMs) return liveCache.states
   const { daySec, dow } = istDayTime(epochMs)
   const today = trainStatesAt(daySec, serviceForDow(dow))
   const yesterdayTail = trainStatesAt(daySec + DAY_SEC, serviceForDow((dow + 6) % 7))
-  return [...today, ...yesterdayTail]
+  liveCache.epochMs = epochMs
+  liveCache.states = [...today, ...yesterdayTail]
+  return liveCache.states
 }
+const liveCache: { epochMs: number; states: TrainState[] } = { epochMs: NaN, states: [] }
 
 /** Live state of one trip by id (or null if not running now). */
 export function trainStateById(epochMs: number, tripId: string): TrainState | null {

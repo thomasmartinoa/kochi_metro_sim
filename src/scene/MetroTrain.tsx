@@ -16,6 +16,7 @@
  * takes over past LOD_SWITCH_M.
  */
 import { Detailed, useGLTF } from '@react-three/drei'
+import { DRACO_PATH, withKTX2 } from './gltf'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { prepareMetroMaterial } from './metroMaterials'
@@ -23,7 +24,7 @@ import { prepareMetroMaterial } from './metroMaterials'
 const FULL_URLS = [0, 1, 2].map((i) => `/models/metro-car${i}.glb?v=11`)
 const LOD_URLS = [0, 1, 2].map((i) => `/models/metro-car${i}-lod.glb?v=11`)
 /** slot 0 leads the train, slot 2 trails it -> model index */
-const SLOT_MODEL = [2, 1, 0] as const
+export const SLOT_MODEL = [2, 1, 0] as const
 const LOD_SWITCH_M = 320
 
 export interface Part {
@@ -51,7 +52,7 @@ export function flattenScene(scene: THREE.Object3D): Part[] {
 export function useCarParts(): Part[][] {
   // '/draco/' — these are Draco-compressed; without the local decoder drei
   // falls back to a CDN fetch and the loader hangs forever offline.
-  const gltfs = useGLTF([...FULL_URLS, ...LOD_URLS], '/draco/') as unknown as {
+  const gltfs = useGLTF([...FULL_URLS, ...LOD_URLS], DRACO_PATH, undefined, withKTX2) as unknown as {
     scene: THREE.Object3D
   }[]
   return useMemo(() => gltfs.map((g) => flattenScene(g.scene)), [gltfs])
@@ -86,4 +87,3 @@ export function CarModel({ slot, parts, hide }: { slot: 0 | 1 | 2; parts: Part[]
   )
 }
 
-useGLTF.preload([...FULL_URLS, ...LOD_URLS], '/draco/')

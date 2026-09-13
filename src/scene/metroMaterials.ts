@@ -152,6 +152,30 @@ function applyPaneAlpha(m: THREE.MeshStandardMaterial): void {
   m.customProgramCacheKey = () => 'kochi-station-glazing'
 }
 
+/**
+ * The metro GLBs each carry their own copy of the textures they share (the
+ * two cab cars and their LODs ship the same thirteen maps four times over;
+ * the span and the station both carry the rails). Every copy is a separate
+ * upload, so the first one seen is kept and the rest point at it.
+ */
+const TEXTURE_SLOTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'] as const
+const canonical = new Map<string, THREE.Texture>()
+function shareTextures(m: THREE.MeshStandardMaterial): void {
+  for (const slot of TEXTURE_SLOTS) {
+    const t = m[slot]
+    if (!t || !t.image) continue
+    const img = t.image as { width?: number; height?: number }
+    if (!t.name || !img.width) continue
+    const key = `${t.name}|${img.width}x${img.height}|${t.colorSpace}|${t.wrapS}|${t.wrapT}`
+    const have = canonical.get(key)
+    if (!have) canonical.set(key, t)
+    else if (have !== t) {
+      m[slot] = have
+      t.dispose()
+    }
+  }
+}
+
 /** materials whose roughness the weather changes, with their dry value */
 const wettable = new Map<THREE.MeshStandardMaterial, number>()
 /** how much of the dry roughness a soaking takes away */
@@ -248,6 +272,7 @@ export function prepareMetroMaterial(material: THREE.Material): void {
   // roof's glazed panels are glossy on purpose and read as flat black without
   // them. They just get a gentler share of the sky, because their diffuse
   // lighting is already painted into the texture.
+  shareTextures(m)
   lightWithSky(m, isBaked ? BAKED_ENV : PBR_ENV)
   if (glass?.env !== undefined) {
     m.envMapIntensity = glass.env

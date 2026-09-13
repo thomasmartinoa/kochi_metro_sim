@@ -16,6 +16,7 @@
  *                                    something (BUTTON_ACTION), the rest click
  */
 import { useGLTF } from '@react-three/drei'
+import { DRACO_PATH, withKTX2 } from '../gltf'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -86,7 +87,7 @@ function fmtTime(daySec: number): string {
 }
 
 export function Cockpit() {
-  const gltf = useGLTF(URL, '/draco/') as unknown as { scene: THREE.Object3D }
+  const gltf = useGLTF(URL, DRACO_PATH, undefined, withKTX2) as unknown as { scene: THREE.Object3D }
   const group = useRef<THREE.Group>(null)
   const lever = useRef<THREE.Object3D | null>(null)
   const leverBase = useRef(0)
@@ -411,4 +412,3 @@ function drawSmall(ctx: CanvasRenderingContext2D, spec: ScreenSpec, d: { dir: 0 
   ctx.fillText(d.dir === 0 ? 'TO TRIPUNITHURA' : 'TO ALUVA', 16, 118)
 }
 
-useGLTF.preload(URL, '/draco/')

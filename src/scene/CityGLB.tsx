@@ -9,6 +9,7 @@
  * app's equirectangular latitude scale (111320 vs true ~110574 m/deg).
  */
 import { useGLTF } from '@react-three/drei'
+import { DRACO_PATH, withKTX2 } from './gltf'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
@@ -35,7 +36,7 @@ export const cityEmissives: THREE.MeshStandardMaterial[] = []
 export const cityWater: THREE.MeshStandardMaterial[] = []
 
 export function CityGLB() {
-  const { scene } = useGLTF(CITY_URL, '/draco/')
+  const { scene } = useGLTF(CITY_URL, DRACO_PATH, undefined, withKTX2)
 
   const gl = useThree((s) => s.gl)
 
@@ -99,4 +100,3 @@ export function CityGLB() {
   return <primitive object={scene} position={[x, 0, z]} scale={[1, 1, LAT_STRETCH]} />
 }
 
-useGLTF.preload(CITY_URL, '/draco/')

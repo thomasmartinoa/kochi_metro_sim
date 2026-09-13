@@ -26,6 +26,8 @@ import { SpeedBoards } from './drive/SpeedBoards'
 import { Signals } from './drive/Signals'
 import { Rain } from './drive/Rain'
 import { GhostTrain } from './drive/GhostTrain'
+import { GltfSetup } from './gltf'
+import { REVERSED_DEPTH } from './depth'
 import { replay } from './drive/replay'
 import { wreck } from './drive/wreck'
 import { HorizonHaze } from './HorizonHaze'
@@ -156,15 +158,19 @@ export function World() {
   return (
     <Canvas
       shadows={false}
-      dpr={[1, 1.75]}
-      // The world spans 1 m (cab view) to 60 km (whole-region view). A normal
+      dpr={[1, 1.5]}
+      // The world spans 8 cm (cab view) to 60 km (whole-region view). A normal
       // depth buffer spends nearly all its precision near the camera, so at a
       // few km the ground/roads/backdrop are indistinguishable and flicker.
-      // A logarithmic buffer keeps precision usable across the whole range.
-      gl={{ logarithmicDepthBuffer: true }}
+      // Reversed-Z keeps precision across the whole range for free where the
+      // GPU allows it; elsewhere the logarithmic buffer does, at the cost of
+      // early depth testing (see depth.ts).
+      gl={{ reversedDepthBuffer: REVERSED_DEPTH, logarithmicDepthBuffer: !REVERSED_DEPTH }}
       camera={{ position: [mid.pos.x + 210, 130, mid.pos.z + 310], far: 60000, near: 1 }}
       onPointerMissed={() => select(null)}
     >
+      {/* first, so every useGLTF below finds the texture loader ready */}
+      <GltfSetup />
       <color attach="background" args={['#BFDDE2']} />
       {/* Haze thick enough that the aerial sheet dissolves into the sky well
           before its edge (~12 km+ out) can be seen. Paired with the zoom-out

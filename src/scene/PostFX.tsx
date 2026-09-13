@@ -25,11 +25,31 @@
  * so the same fixed threshold naturally catches far more after dark.)
  */
 import { Bloom, EffectComposer, ToneMapping } from '@react-three/postprocessing'
+import { useThree } from '@react-three/fiber'
+import { useLayoutEffect, useRef } from 'react'
+import type { EffectComposer as ComposerImpl } from 'postprocessing'
 import { ToneMappingMode } from 'postprocessing'
+import * as THREE from 'three'
+import { REVERSED_DEPTH } from './depth'
 
 export function PostFX() {
+  const composer = useRef<ComposerImpl>(null)
+  const size = useThree((s) => s.size)
+  // Reversed-Z needs a floating-point depth attachment to pay off (see
+  // depth.ts); the composer's input buffer is where the scene is drawn, so
+  // that is where it goes. setSize keeps it in step with the canvas.
+  useLayoutEffect(() => {
+    const c = composer.current
+    if (!REVERSED_DEPTH || !c) return
+    const buf = c.inputBuffer
+    if (!buf.depthTexture) {
+      const depth = new THREE.DepthTexture(size.width, size.height, THREE.FloatType)
+      depth.format = THREE.DepthFormat
+      buf.depthTexture = depth
+    }
+  }, [size])
   return (
-    <EffectComposer multisampling={0}>
+    <EffectComposer ref={composer} multisampling={0}>
       <Bloom
         intensity={0.5}
         // above 1.0 = brighter than white, i.e. genuinely a light source or a
